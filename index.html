@@ -1,0 +1,3151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Standard Work CAD Layout Editor V13 - 2D + 3D CAD</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1e1e1e; color: #ccc; overflow: hidden; }
+    
+    /* Top Bar Header */
+    #top-bar { height: 46px; background: #252526; border-bottom: 1px solid #3c3c3c; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; z-index: 20; gap: 8px; flex-shrink: 0; }
+    .top-group { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+    
+    /* Process Symbol & Scale Row */
+    #second-bar { background: #1b1b1c; border-bottom: 1px solid #3c3c3c; padding: 4px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; z-index: 15; min-height: 42px; flex-wrap: wrap; flex-shrink: 0; }
+    #second-bar.cad-active { flex-wrap: nowrap; padding: 4px 10px; overflow-x: auto; }
+    #second-bar.cad-active #process-container, #second-bar.cad-active #scale-container { display:none; }
+    #process-container { display: flex; align-items: center; gap: 6px; overflow-x: auto; white-space: nowrap; flex: 1; }
+    .bar-title { font-size: 0.7rem; font-weight: bold; text-transform: uppercase; color: #00ffcc; margin-right: 2px; }
+
+    /* Scale Container in 2nd Row */
+    #scale-container { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    #scale-container label { font-size: 0.75rem; text-transform: uppercase; color: #aaa; font-weight: 600; white-space: nowrap; }
+
+    /* Main Workspace Layout */
+    #app-body { flex: 1; display: flex; position: relative; overflow: hidden; }
+
+    /* 2nd Vertical LHS Toolbar: Drawing Tools */
+    #left-toolbar { width: 52px; background: #2d2d2d; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 6px; z-index: 10; flex-shrink: 0; overflow-y: auto; }
+    
+    /* Vertical RHS Toolbar */
+    #right-toolbar { width: 140px; background: #252526; border-left: 1px solid #3c3c3c; display: flex; flex-direction: column; align-items: center; padding: 8px 6px; gap: 6px; z-index: 10; flex-shrink: 0; overflow-y: auto; }
+    .rhs-title { font-size: 0.65rem; font-weight: bold; text-transform: uppercase; color: #00ffcc; margin-bottom: 4px; text-align: center; width: 100%; border-bottom: 1px solid #3c3c3c; padding-bottom: 4px; }
+
+    /* Bottom Inspector Toolbar & AutoCAD Style Prompt Bar */
+    #bottom-panel { border-top: 1px solid #3c3c3c; display: flex; flex-direction: column; z-index: 11; flex-shrink: 0; }
+    #command-prompt-bar { height: 28px; background: #181818; border-bottom: 1px solid #333; display: flex; align-items: center; padding: 0 16px; gap: 8px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.8rem; }
+    #command-prompt-label { color: #00ffcc; font-weight: bold; text-transform: uppercase; flex-shrink: 0; }
+    #command-instruction { color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    #inspector-toolbar { height: 50px; background: #252526; display: flex; align-items: center; padding: 0 16px; gap: 16px; overflow-x: auto; }
+    #inspector-toolbar .inspector-title { font-size: 0.7rem; font-weight: bold; text-transform: uppercase; color: #00ffcc; border-right: 1px solid #3c3c3c; padding-right: 12px; white-space: nowrap; }
+    .inspector-field { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .inspector-field label { font-size: 0.68rem; color: #aaa; text-transform: uppercase; font-weight: bold; white-space: nowrap; }
+    .inspector-field input, .inspector-field select { height: 28px; padding: 2px 6px; }
+
+    .tool-btn-lhs { width: 40px; height: 40px; padding: 0; border: 1px solid transparent; background: transparent; color: #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+    .tool-btn-lhs:hover { background: #333333; color: #fff; border-color: #454545; }
+    .tool-btn-lhs.active { background: #007acc; color: #fff; border-color: #007acc; }
+
+    .tool-btn-rhs { width: 100%; height: 32px; padding: 0 6px; border: 1px solid #3c3c3c; background: #2d2d2d; color: #ccc; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: flex-start; gap: 6px; transition: all 0.2s; flex-shrink: 0; font-size: 0.7rem; font-weight: 500; }
+    .tool-btn-rhs:hover { background: #3c3c3c; color: #fff; border-color: #555; }
+    .tool-btn-rhs.active { background: #007acc; color: #fff; border-color: #007acc; }
+
+    button { padding: 5px 10px; border: 1px solid #007acc; background: #007acc; color: white; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 0.75rem; transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+    button:hover { background: #0062a3; }
+    button.secondary { background: #333; color: #ccc; border-color: #454545; }
+    button.secondary:hover { background: #444; color: #fff; }
+    button.secondary.active { background: #007acc; color: #fff; border-color: #007acc; }
+    button.danger { background: #a93226; border-color: #a93226; }
+    button.danger:hover { background: #922b21; }
+    button.success { background: #22a7f0; border-color: #22a7f0; }
+    button.success:hover { background: #1a82bc; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+    .btn-svg-rhs { width: 16px; height: 16px; fill: currentColor; flex-shrink: 0; }
+
+    /* Canvas Viewport */
+    #main { flex: 1; display: flex; flex-direction: column; position: relative; background: #121212; }
+    #canvas-container { flex: 1; position: relative; cursor: crosshair; overflow: hidden; }
+    canvas { display: block; outline: none; }
+    
+    input[type="number"], select, input[type="text"], input[type="color"] { padding: 4px 6px; border: 1px solid #3c3c3c; background: #333333; color: #fff; border-radius: 3px; font-size: 0.8rem; }
+    .info-badge { background: #007acc22; border: 1px solid #007acc; color: #61afef; padding: 4px 8px; border-radius: 3px; font-size: 0.75rem; font-family: monospace; white-space: nowrap; }
+    .coord-hud { position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.7); border: 1px solid #444; color: #00ffcc; padding: 4px 8px; font-family: monospace; font-size: 0.75rem; border-radius: 3px; pointer-events: none; }
+
+    #cursor-hud {
+      position: absolute; display: none; pointer-events: none; background: rgba(15, 23, 42, 0.92); border: 1px solid #00ffcc; color: #00ffcc; font-family: 'Consolas', monospace; font-size: 0.75rem; font-weight: bold; padding: 4px 8px; border-radius: 4px; z-index: 100; white-space: nowrap;
+    }
+
+    #dimension-input-hud {
+      position: absolute; display: none; pointer-events: auto; z-index: 1001;
+      background: rgba(24, 28, 36, 0.97); border: 1px solid #00ffcc;
+      color: #fff; padding: 7px 8px; border-radius: 5px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.45); min-width: 150px;
+      font-family: 'Segoe UI', sans-serif; font-size: 12px;
+    }
+    #dimension-input-hud .dim-title { color:#00ffcc; font-weight:700; margin-bottom:5px; white-space:nowrap; }
+    #dimension-input-hud .dim-row { display:flex; align-items:center; gap:5px; margin:3px 0; }
+    #dimension-input-hud .dim-row label { width:24px; color:#bbb; font-weight:600; }
+    #dimension-input-hud input { width:78px; padding:4px 5px; background:#333; border:1px solid #555; color:#fff; border-radius:3px; font-size:12px; }
+    #dimension-input-hud input:focus { border-color:#00ffcc; outline:none; }
+    #dimension-input-hud .dim-unit { color:#888; min-width:18px; }
+    #dimension-input-hud .dim-hint { color:#888; font-size:10px; margin-top:4px; white-space:nowrap; }
+    #dimension-input-hud button { margin-top:5px; padding:3px 7px; border:1px solid #00ffcc; background:#143b39; color:#00ffcc; border-radius:3px; cursor:pointer; font-size:11px; }
+
+    #inline-text-input {
+      position: absolute; display: none; z-index: 1000; background: rgba(30,30,30,0.95); border: 1px solid #00ffcc; color: #fff; padding: 4px 8px; font-size: 14px; font-family: sans-serif; outline: none; border-radius: 3px; min-width: 120px;
+    }
+
+
+    /* V8: 3D CAD / STEP / IGES viewer */
+    #cad3d-toolbar { display:none; align-items:center; gap:6px; overflow-x:auto; white-space:nowrap; width:auto; flex:1 1 auto; min-width:0; }
+    #second-bar.cad-active #cad3d-toolbar { display:flex; }
+    #cad3d-toolbar.active { display:flex; }
+    #cad3d-toolbar .cad-label { color:#00ffcc; font-weight:700; font-size:.72rem; }
+    #cad3d-toolbar input[type="number"] { width:70px; height:28px; }
+    #cad3d-toolbar select { height:28px; }
+    #cad3dViewport { position:absolute; inset:0; display:none; background:#101010; overflow:hidden; }
+    #cad3dViewport.active { display:block; }
+    #cad3dCanvas { width:100%; height:100%; display:block; touch-action:none; }
+    #cad3dStatus { position:absolute; left:12px; top:12px; padding:6px 9px; background:rgba(20,20,20,.86); border:1px solid #444; border-radius:4px; color:#ddd; font:12px Consolas,monospace; pointer-events:none; max-width:60%; }
+    #cad3dHelp { position:absolute; right:12px; top:12px; padding:6px 9px; background:rgba(20,20,20,.86); border:1px solid #444; border-radius:4px; color:#aaa; font-size:11px; pointer-events:none; }
+    #cadViewCube { position:absolute; right:16px; bottom:16px; width:122px; height:122px; z-index:5; perspective:420px; pointer-events:none; }
+    .vc-cube { position:relative; width:70px; height:70px; margin:26px auto; transform-style:preserve-3d; transform:rotateX(-25deg) rotateY(35deg); pointer-events:none; }
+    .vc-face { position:absolute; width:70px; height:70px; padding:0; border:1px solid #777; background:rgba(55,55,55,.94); color:#fff; font-size:9px; pointer-events:auto; opacity:.96; }
+    .vc-front{transform:translateZ(35px)} .vc-back{transform:rotateY(180deg) translateZ(35px)} .vc-right{transform:rotateY(90deg) translateZ(35px)} .vc-left{transform:rotateY(-90deg) translateZ(35px)} .vc-top{transform:rotateX(90deg) translateZ(35px)} .vc-bottom{transform:rotateX(-90deg) translateZ(35px)}
+    #cad3dMeasureLabel { position:absolute; left:14px; bottom:14px; padding:7px 10px; background:rgba(20,20,20,.9); border:1px solid #00ffcc; border-radius:4px; color:#fff; font:12px Consolas,monospace; display:none; z-index:6; }
+    #cad3dInfo { min-width:360px; color:#ddd; font-size:.72rem; }
+    #cad3dInfo strong { color:#00ffcc; }
+    #cad3dSelection { color:#f5d76e; }
+    .cad-face-selected { outline:2px solid #ffd54a; }
+
+    /* V3 MOBILE / TOUCH LAYOUT */
+    #canvas-container, #layoutCanvas { touch-action: none; }
+    button, .tool-btn-lhs, .tool-btn-rhs, input, select { touch-action: manipulation; }
+    @media (max-width: 768px) {
+      body { height: 100dvh; min-height: 100dvh; }
+      #top-bar { height: auto; min-height: 44px; padding: 5px 8px; overflow-x: auto; overflow-y: hidden; justify-content: flex-start; }
+      #top-bar .top-group { flex-wrap: nowrap; min-width: max-content; }
+      #top-bar button { min-height: 36px; padding: 6px 9px; font-size: 0.72rem; }
+      #second-bar { min-height: 46px; padding: 5px 8px; display: block; overflow: hidden; }
+      #second-bar.cad-active { display:flex; min-height:46px; padding:5px 8px; overflow-x:auto; overflow-y:hidden; }
+      #second-bar.cad-active #cad3d-toolbar { display:flex; width:max-content; flex:0 0 auto; }
+      #process-container { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+      #process-container .tool-btn { min-height: 36px; }
+      #scale-container { width: 100%; overflow-x: auto; margin-top: 5px; padding-bottom: 2px; justify-content: flex-start; }
+      #scale-container label { font-size: 0.68rem; }
+      #scale-container input, #scale-container select { height: 34px !important; min-width: 52px; }
+      #scale-container .info-badge { font-size: 0.68rem; }
+
+      #app-body { flex-direction: column; min-height: 0; }
+      #main { order: 1; min-height: 0; width: 100%; flex: 1 1 auto; }
+      #left-toolbar, #right-toolbar { order: 2; width: 100%; height: 50px; min-height: 50px; max-height: 50px; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 5px 7px; gap: 5px; border-right: 0; border-left: 0; border-top: 1px solid #3c3c3c; }
+      #right-toolbar { order: 3; height: 50px; min-height: 50px; max-height: 50px; padding: 5px 7px; }
+      #left-toolbar .tool-btn-lhs { width: 40px; min-width: 40px; height: 40px; }
+      #left-toolbar span { width: 1px !important; height: 28px !important; margin: 6px 3px !important; flex: 0 0 1px; }
+      #right-toolbar .rhs-title { width: auto; min-width: 58px; margin: 0 2px 0 0; padding: 0 7px 0 0; border-bottom: 0; border-right: 1px solid #3c3c3c; line-height: 40px; }
+      #right-toolbar .tool-btn-rhs { width: auto; min-width: 88px; height: 40px; }
+
+      #bottom-panel { max-height: 88px; }
+      #command-prompt-bar { height: 30px; min-height: 30px; padding: 0 8px; font-size: 0.7rem; }
+      #inspector-toolbar { height: 58px; min-height: 58px; padding: 4px 8px; gap: 10px; overflow-x: auto; }
+      .inspector-field input, .inspector-field select { height: 34px; }
+      .coord-hud { bottom: 8px; right: 8px; font-size: 0.68rem; }
+      #cursor-hud { font-size: 0.68rem; max-width: 70vw; overflow: hidden; text-overflow: ellipsis; }
+      #inline-text-input { min-width: 160px; min-height: 38px; font-size: 16px; }
+    }
+
+    @media (max-width: 430px) {
+      #top-bar button { font-size: 0.68rem; padding: 5px 7px; }
+      #second-bar { min-height: 44px; }
+      #scale-container { display: none; }
+      #bottom-panel { max-height: 82px; }
+      #inspector-toolbar { height: 52px; min-height: 52px; }
+    }
+  </style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
+</head>
+<body>
+
+  <!-- TOP BAR: ACTIONS -->
+  <div id="top-bar">
+    <div class="top-group">
+      <button class="secondary" onclick="undo()" id="undoBtn" title="Undo (Ctrl+Z)" disabled>
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg> Undo
+      </button>
+      <button class="secondary" onclick="redo()" id="redoBtn" title="Redo (Ctrl+Y)" disabled>
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.96 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z"/></svg> Redo
+      </button>
+      <button class="secondary" onclick="triggerImageUpload()" title="Insert Image">Insert Image</button>
+      <input type="file" id="imageLoader" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+      
+      <button class="secondary" onclick="saveProjectJson()" title="Save Editable Drawing (Ctrl+S)">Save Project</button>
+      <button class="secondary" onclick="triggerJsonImport()" title="Open Editable Drawing (.json)">Open Project</button>
+      <input type="file" id="jsonLoader" accept=".json" style="display:none;" onchange="handleJsonImport(event)">
+
+      <button class="success" onclick="exportToPDF()" title="Export Final Drawing as PDF">Save PDF</button>
+      <button class="secondary" onclick="exportToDWG()" title="Export CAD drawing in .dwg/.dxf format">Save DWG</button>
+      <button class="secondary" onclick="createNewPage()">New</button>
+      <button class="secondary" id="cad3dToggleBtn" onclick="toggle3DMode()" title="Open the 3D CAD viewer for STEP / STP / IGES / IGS">3D CAD</button>
+      <input type="file" id="cad3dFileLoader" accept=".step,.stp,.iges,.igs" style="display:none;" onchange="handleCAD3DFile(event)">
+      
+      <span style="width:1px; height:20px; background:#3c3c3c; margin: 0 4px;"></span>
+      
+      <span class="bar-title">Align:</span>
+      <button class="secondary" onclick="alignSelected('left')" title="Align Left">L</button>
+      <button class="secondary" onclick="alignSelected('center')" title="Align Center (X)">CX</button>
+      <button class="secondary" onclick="alignSelected('right')" title="Align Right">R</button>
+      <button class="secondary" onclick="alignSelected('top')" title="Align Top">T</button>
+      <button class="secondary" onclick="alignSelected('middle')" title="Align Middle (Y)">CY</button>
+      <button class="secondary" onclick="alignSelected('bottom')" title="Align Bottom">B</button>
+
+      <span style="width:1px; height:20px; background:#3c3c3c; margin: 0 4px;"></span>
+      <label style="font-size:0.75rem; color:#888;">Style:</label>
+      <select id="globalLineStyle" style="height:26px;">
+        <option value="solid">Solid ――</option>
+        <option value="dashed">Dashed ---</option>
+      </select>
+
+      <span style="width:1px; height:20px; background:#3c3c3c; margin: 0 4px;"></span>
+      <label style="font-size:0.75rem; color:#00ffcc; font-weight:bold;">Offset Dist:</label>
+      <input type="number" id="offsetDistanceInput" value="0.5" step="0.1" min="0.01" style="width:55px; height:26px;">
+    </div>
+  </div>
+
+  <!-- SECOND BAR: PROCESS SYMBOLS, SCALE, GRID -->
+  <div id="second-bar">
+    <div id="process-container">
+      <button class="secondary tool-btn" data-tool="pan" onclick="setMode('pan')" title="Pan Canvas">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M23 12l-4-4v3h-5V6h3l-4-4-4 4h3v5H6V8l-4 4 4 4v-3h5v5H8l4 4 4-4h-3v-5h5v3l4-4z"/></svg> Pan
+      </button>
+      <button class="secondary" onclick="copySelected()" title="Copy (Ctrl+C)">Copy</button>
+      <button class="secondary" onclick="pasteClipboard()" title="Paste (Ctrl+V)">Paste</button>
+
+      <span style="width:1px; height:20px; background:#3c3c3c; margin: 0 4px;"></span>
+      <span class="bar-title">Process:</span>
+
+      <button class="secondary tool-btn" data-tool="quality" onclick="setMode('quality')" title="Quality Check">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="#e74c3c"><path d="M12 2L2 12l10 10 10-10L12 2zm0 3.83L18.17 12 12 18.17 5.83 12 12 5.83z"/></svg> Quality
+      </button>
+      <button class="secondary tool-btn" data-tool="safety" onclick="setMode('safety')" title="Safety">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="#2ecc71"><path d="M19 10.5h-5.5V5h-3v5.5H5v3h5.5V19h3v-5.5H19v-3z"/></svg> Safety
+      </button>
+      <button class="secondary tool-btn" data-tool="wip" onclick="setMode('wip')" title="Std WIP">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="none" stroke="#f39c12" stroke-width="2">
+          <ellipse cx="12" cy="12" rx="10" ry="6"/>
+          <line x1="5" y1="15" x2="15" y2="7"/>
+          <line x1="8" y1="17" x2="18" y2="9"/>
+          <line x1="11" y1="18" x2="19" y2="11"/>
+        </svg> WIP
+      </button>
+      <button class="secondary tool-btn" data-tool="input_fg" onclick="setMode('input_fg')" title="Input / FG">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="#3498db"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7.7 17L12 12.7 16.3 17l1.4-1.4L13.4 11.3l4.3-4.3-1.4-1.4L12 9.9 7.7 5.6 6.3 7l4.3 4.3-4.3 4.3z"/></svg> In/Out
+      </button>
+      <button class="secondary tool-btn" data-tool="operator" onclick="setMode('operator')" title="Operator">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 7c2.7 0 5.8 1.29 6 4a8 8 0 0 1-12 0c.2-2.71 3.3-4 6-4z"/></svg> Operator
+      </button>
+      <button class="secondary tool-btn" data-tool="next_process" onclick="setMode('next_process')" title="Next Process">
+        <svg class="btn-svg" viewBox="0 0 24 24" fill="#1abc9c"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg> Next
+      </button>
+    </div>
+
+    <div id="cad3d-toolbar">
+      <span class="cad-label">3D CAD:</span>
+      <button class="secondary" onclick="openCAD3DFile()">Open STEP/IGES</button>
+      <span class="cad-label">Views:</span>
+      <button class="secondary" onclick="cad3DView('front')">Front</button><button class="secondary" onclick="cad3DView('back')">Back</button><button class="secondary" onclick="cad3DView('left')">Left</button><button class="secondary" onclick="cad3DView('right')">Right</button><button class="secondary" onclick="cad3DView('top')">Top</button><button class="secondary" onclick="cad3DView('bottom')">Bottom</button>
+      <button class="secondary" onclick="cad3DView('iso1')">ISO-1</button><button class="secondary" onclick="cad3DView('iso2')">ISO-2</button><button class="secondary" onclick="cad3DView('iso3')">ISO-3</button>
+      <button class="secondary" onclick="cad3DFit()">Fit</button>
+      <button class="secondary" id="cadMeasureBtn" onclick="toggleCAD3DMeasure()">3D Measure</button><button class="secondary" onclick="clearCAD3DMeasure()">Clear Dim</button>
+      <button class="secondary" onclick="clearCAD3DSelection()">Clear Face Selection</button>
+      <label class="cad-label">Density kg/m³</label>
+      <input id="cadDensity" type="number" min="0" step="10" value="2700" title="Material density for weight calculation">
+    </div>
+
+    <!-- Scale & Grid Controls -->
+    <div id="scale-container">
+      <label>Scale:</label>
+      <input type="number" id="scaleRatio" value="1" min="0.1" step="0.5" style="width:45px;">
+      <select id="scaleUnit">
+        <option value="m" selected>m</option>
+        <option value="ft">ft</option>
+        <option value="mm">mm</option>
+        <option value="in">in</option>
+      </select>
+      <label style="margin-left:4px;">Grid:</label>
+      <input type="number" id="gridPx" value="40" min="10" max="100" step="5" style="width:45px;">
+      <label style="text-transform:none;"><input type="checkbox" id="snapGrid" checked> Snap</label>
+      <div class="info-badge" id="scaleDisplay">1 Sq = 1.00 m</div>
+      <button class="danger" onclick="clearCanvas()">Clear</button>
+    </div>
+  </div>
+
+  <div id="app-body">
+    <!-- 1ST VERTICAL LHS TOOLBAR: DRAWING TOOLS -->
+    <div id="left-toolbar">
+      <button class="tool-btn-lhs tool-btn" data-tool="line" onclick="setMode('line')" title="Line Tool">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M3.5 18.49l14.99-14.99 1.41 1.41L4.91 19.9z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="arrow" onclick="setMode('arrow')" title="Arrow Line Tool">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M5 13h11.17l-4.88 4.88c-.39.39-.39 1.03 0 1.42.39.39 1.02.39 1.41 0l6.59-6.59c.39-.39.39-1.02 0-1.41l-6.58-6.6c-.39-.39-1.02-.39-1.41 0-.39.39-.39 1.02 0 1.41L16.17 11H5c-.55 0-1 .45-1 1s.45 1 1 1z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="double_arrow" onclick="setMode('double_arrow')" title="Double Arrow Line Tool">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M6.83 11l3.58-3.59L9 6l-6 6 6 6 1.41-1.41L6.83 13h10.34l-3.58 3.59L15 18l6-6-6-6-1.41 1.41L17.17 11H6.83z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="rectangle" onclick="setMode('rectangle')" title="Rectangle Tool">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M3 5v14h18V5H3zm16 12H5V7h14v10z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="circle" onclick="setMode('circle')" title="Circle Tool">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="elbow" onclick="setMode('elbow')" title="Elbow Connector">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M4 4v8h12v8h4v-12H8V4H4z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn" data-tool="text" onclick="setMode('text')" title="Text Box">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M5 4v3h5.5v12h3V7H19V4H5z"/></svg>
+      </button>
+      <button class="tool-btn-lhs tool-btn active" data-tool="select" onclick="setMode('select')" title="Select / Move">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M7 2l12 11.2-5.8.5 3.3 7.3-2.2 1-3.2-7.2L7 19V2z"/></svg>
+      </button>
+      <span style="width: 24px; height: 1px; background: #3c3c3c; margin: 2px 0;"></span>
+      <button class="tool-btn-lhs tool-btn" data-tool="offset" onclick="setMode('offset')" title="AutoCAD Offset Tool (O)">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M19 15v4H5v-4H3v6h18v-6h-2zm0-10V1H5v4H3V-1h18v6h-2zM7 9h10v6H7V9zm2 2v2h6v-2H9z"/></svg>
+      </button>
+    </div>
+
+    <!-- CANVAS VIEWPORT -->
+    <div id="main">
+      <div id="canvas-container">
+        <div id="cad3dViewport">
+          <canvas id="cad3dCanvas"></canvas>
+          <div id="cad3dStatus">3D CAD viewer ready. Open a STEP / STP / IGES / IGS file.</div>
+          <div id="cad3dHelp">Drag = rotate · Wheel = zoom · Right drag = pan · Click faces = paint-area selection</div>
+          <div id="cadViewCube" aria-label="3D view cube">
+            <div class="vc-cube">
+              <button class="vc-face vc-front" onclick="cad3DView('front')">FRONT</button>
+              <button class="vc-face vc-back" onclick="cad3DView('back')">BACK</button>
+              <button class="vc-face vc-right" onclick="cad3DView('right')">RIGHT</button>
+              <button class="vc-face vc-left" onclick="cad3DView('left')">LEFT</button>
+              <button class="vc-face vc-top" onclick="cad3DView('top')">TOP</button>
+              <button class="vc-face vc-bottom" onclick="cad3DView('bottom')">BOTTOM</button>
+            </div>
+          </div>
+          <div id="cad3dMeasureLabel"></div>
+        </div>
+        <canvas id="layoutCanvas" tabindex="0"></canvas>
+        <input type="text" id="inline-text-input" placeholder="Type text..." onblur="commitInlineText()" onkeydown="handleTextKey(event)">
+        <div class="coord-hud" id="coordHud">X: 0.00m | Y: 0.00m</div>
+        <div id="cursor-hud"></div>
+        <div id="dimension-input-hud">
+          <div class="dim-title" id="dimHudTitle">Exact Dimensions</div>
+          <div id="dimHudFields"></div>
+          <div class="dim-hint">Enter/Apply = accept exact size; after accepting, click/drag on canvas to place it</div>
+          <button type="button" id="dimHudApply">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RHS VERTICAL FLOWCHART SYMBOLS TOOLBAR -->
+    <div id="right-toolbar">
+      <div class="rhs-title">Flowchart</div>
+      <button class="tool-btn-rhs tool-btn" data-tool="parallelogram" onclick="setMode('parallelogram')" title="Input Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#3498db"><polygon points="6,4 22,4 18,20 2,20"/></svg> Input
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="diamond" onclick="setMode('diamond')" title="Decision Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#e74c3c"><polygon points="12,2 22,12 12,22 2,12"/></svg> Decision
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="process_shape" onclick="setMode('process_shape')" title="Process Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#34495e"><rect x="3" y="6" width="18" height="12" rx="1"/></svg> Process
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="merge" onclick="setMode('merge')" title="Merge Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#9b59b6"><polygon points="12,20 2,4 22,4"/></svg> Merge
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="database" onclick="setMode('database')" title="Database Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#f39c12"><path d="M12 2C7 2 3 3.8 3 6v12c0 2.2 4 4 9 4s9-1.8 9-4V6c0-2.2-4-4-9-4zm0 2c3.9 0 7 1.2 7 2s-3.1 2-7 2-7-1.2-7-2 3.1-2 7-2z"/></svg> Database
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="terminal" onclick="setMode('terminal')" title="Terminal Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#1abc9c"><rect x="2" y="6" width="20" height="12" rx="6" ry="6"/></svg> Terminal
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="pill" onclick="setMode('pill')" title="Delay Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#a2d149"><path d="M3,6 H14 A6,6 0 0,1 14,18 H3 Z"/></svg> Delay
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="document_shape" onclick="setMode('document_shape')" title="Document Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#e67e22"><path d="M3 4h18v12c-3-2-6 2-9 0s-6-2-9 0V4z"/></svg> Document
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="multi_document" onclick="setMode('multi_document')" title="Multi-Document Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#d35400"><path d="M3 7h14v10c-2-1.5-4 1.5-7 0s-5-1.5-7 0V7z"/><path d="M6 4h14v10" stroke="#d35400" fill="none"/></svg> Multi-Doc
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="preparation" onclick="setMode('preparation')" title="Preparation Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#8e44ad"><polygon points="6,4 18,4 22,12 18,20 6,20 2,12"/></svg> Preparation
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="end_shape" onclick="setMode('end_shape')" title="End Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#c0392b"><polygon points="3,4 21,4 21,14 12,20 3,14"/></svg> End
+      </button>
+      <button class="tool-btn-rhs tool-btn" data-tool="manual_input" onclick="setMode('manual_input')" title="Manual Input Shape">
+        <svg class="btn-svg-rhs" viewBox="0 0 24 24" fill="#2980b9"><polygon points="3,8 21,4 21,20 3,20"/></svg> Manual Input
+      </button>
+    </div>
+  </div>
+
+  <!-- BOTTOM PANEL: COMMAND INSTRUCTION PROMPT & INSPECTOR PANEL -->
+  <div id="bottom-panel">
+    <div id="command-prompt-bar">
+      <span id="command-prompt-label">COMMAND:</span>
+      <span id="command-instruction">Select a command or tool to begin...</span><span style="margin-left:auto;color:#666;font-size:0.68rem;">V13 • 2D + STEP/IGES 3D CAD</span>
+    </div>
+    <div id="inspector-toolbar">
+      <span class="inspector-title">INSPECTOR</span>
+      
+      <button class="secondary tool-btn" data-tool="linear_dimension" onclick="setMode('linear_dimension')" title="Linear Dimension - select 2 points" style="margin-right: 4px;">
+        <svg class="btn-svg" viewBox="0 0 24 24"><path d="M4 5v14M20 5v14M4 7h4M4 17h4M20 7h-4M20 17h-4M8 12h8M8 12l2-2M8 12l2 2M16 12l-2-2M16 12l-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Linear Dim
+      </button>
+      <button class="secondary tool-btn" data-tool="radius_measure" onclick="setMode('radius_measure')" title="Radius - click a circle" style="margin-right: 8px;">
+        <svg class="btn-svg" viewBox="0 0 24 24"><circle cx="10" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 12l8-5M18 7l-3 0M18 7l-1 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg> Radius
+      </button>
+
+      <div id="cad3dInfo">3D CAD: <strong>no model loaded</strong></div>
+      <div id="editPanel" style="display: flex; align-items: center; gap: 12px; flex: 1; overflow-x: auto;">
+        <span style="font-size:0.75rem; color:#888;">No Selection</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('layoutCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+    const cursorHud = document.getElementById('cursor-hud');
+    const inlineTextInput = document.getElementById('inline-text-input');
+    const dimensionInputHud = document.getElementById('dimension-input-hud');
+    const dimHudTitle = document.getElementById('dimHudTitle');
+    const dimHudFields = document.getElementById('dimHudFields');
+    const dimHudApply = document.getElementById('dimHudApply');
+    let dimensionInputs = {};
+    let exactDimensionArmed = false;
+    const DIMENSION_DRAW_TOOLS = new Set(['line','arrow','double_arrow','rectangle','circle']);
+
+    let scaleRatio = 1;      
+    let scaleUnit = 'm';     
+    let gridPx = 40;         
+    let snapToGrid = true;
+
+    let currentMode = 'select'; 
+    let shapes = [];
+    let selectedShapes = []; 
+    let clipboard = [];
+    let isDrawing = false;
+    let isDragging = false;
+    let isRotating = false;
+    let isBoxSelecting = false;
+    let isPanning = false;
+
+    let currentFileHandle = null;
+
+    // V5: only two measurement tools are retained.
+    let linearDimStart = null;
+    let linearDimPreview = null;
+    let activeMeasureInfo = null;
+
+    let activeHandle = null; 
+    let startX = 0, startY = 0;
+    let currentMouseWorld = { x: 0, y: 0 };
+    let currentStartPoint = null; 
+    let dragOffsets = [];
+    const HANDLE_SIZE = 8;
+    const ROTATE_HANDLE_OFFSET = 25;
+
+    let panX = 0, panY = 0;
+    let zoom = 1;
+    let panStartX = 0, panStartY = 0;
+
+    let activeTextShape = null;
+    let undoStack = [], redoStack = [];
+
+    const INSTRUCTIONS = {
+      select: "SELECT: Click on an object to select it. Click and drag on empty space to box-select multiple objects.",
+      line: "LINE: Click and drag to draw a straight line.",
+      arrow: "ARROW: Click and drag to draw a line with an arrow.",
+      double_arrow: "DOUBLE ARROW: Click and drag to draw a double-headed arrow line.",
+      rectangle: "RECTANGLE: Click and drag to draw a rectangle shape.",
+      circle: "CIRCLE: Click and drag to draw a circle.",
+      elbow: "ELBOW CONNECTOR: Click and drag to create an elbow-shaped connector line.",
+      text: "TEXT TOOL: Click anywhere on the canvas to place a text box.",
+      offset: "OFFSET: Click an object on the canvas to offset it by the specified distance.",
+      linear_dimension: "LINEAR DIMENSION: Select point 1 and point 2. The dimension is created automatically; snap works on entity edges/endpoints.",
+      radius_measure: "RADIUS: Click a circle. A radius measurement is created and shown with a leader.",
+      pan: "PAN: Click and drag to move the canvas view freely.",
+      quality: "QUALITY CHECK: Click and drag to place a Quality Check symbol.",
+      safety: "SAFETY: Click and drag to place a Safety symbol.",
+      wip: "STD WIP: Click and drag to place a Standard WIP symbol.",
+      input_fg: "INPUT / FG: Click and drag to place an Input/Output FG symbol.",
+      operator: "OPERATOR: Click and drag to place an Operator symbol.",
+      next_process: "NEXT PROCESS: Click and drag to place a Next Process arrow symbol.",
+      parallelogram: "INPUT SHAPE: Click and drag to place a Parallelogram Input shape.",
+      diamond: "DECISION SHAPE: Click and drag to place a Decision Diamond shape.",
+      process_shape: "PROCESS SHAPE: Click and drag to place a Process Box shape.",
+      merge: "MERGE SHAPE: Click and drag to place a Merge triangle shape.",
+      database: "DATABASE SHAPE: Click and drag to place a Database symbol.",
+      terminal: "TERMINAL SHAPE: Click and drag to place a Terminal Start/End shape.",
+      pill: "DELAY SHAPE: Click and drag to place a Delay shape.",
+      document_shape: "DOCUMENT SHAPE: Click and drag to place a Document shape.",
+      multi_document: "MULTI-DOC SHAPE: Click and drag to place a Multi-Document shape.",
+      preparation: "PREPARATION SHAPE: Click and drag to place a Preparation hexagon shape.",
+      end_shape: "END SHAPE: Click and drag to place an End shape.",
+      manual_input: "MANUAL INPUT: Click and drag to place a Manual Input shape."
+    };
+
+    function updateInstructionPrompt(mode) {
+      const promptEl = document.getElementById('command-instruction');
+      if (INSTRUCTIONS[mode]) {
+        promptEl.innerText = INSTRUCTIONS[mode];
+      } else {
+        promptEl.innerText = "Select a command or tool to begin...";
+      }
+    }
+
+    const SYMBOL_DEFAULTS = {
+      quality:            { strokeColor: '#e74c3c', wPx: 50, hPx: 50, label: 'Quality Check' },
+      safety:             { strokeColor: '#2ecc71', wPx: 50, hPx: 50, label: 'Safety' },
+      wip:                { strokeColor: '#f39c12', wPx: 60, hPx: 35, label: 'Std WIP' },
+      input_fg:           { strokeColor: '#3498db', wPx: 60, hPx: 50, label: 'Input/FG' },
+      operator:           { strokeColor: '#9b59b6', wPx: 50, hPx: 50, label: 'Operator' },
+      next_process:       { strokeColor: '#1abc9c', wPx: 60, hPx: 40, label: 'Next Process' },
+      
+      parallelogram:      { strokeColor: '#3498db', wPx: 80, hPx: 45, label: 'Input' },
+      diamond:            { strokeColor: '#e74c3c', wPx: 60, hPx: 60, label: 'Decision' },
+      process_shape:      { strokeColor: '#34495e', wPx: 80, hPx: 45, label: 'Process' },
+      merge:              { strokeColor: '#9b59b6', wPx: 60, hPx: 50, label: 'Merge' },
+      database:           { strokeColor: '#f39c12', wPx: 60, hPx: 60, label: 'Database' },
+      terminal:           { strokeColor: '#1abc9c', wPx: 80, hPx: 40, label: 'Terminal' },
+      pill:               { strokeColor: '#a2d149', wPx: 80, hPx: 45, label: 'Delay' },
+      document_shape:     { strokeColor: '#e67e22', wPx: 70, hPx: 50, label: 'Document' },
+      multi_document:     { strokeColor: '#d35400', wPx: 75, hPx: 55, label: 'Multi-Document' },
+      preparation:        { strokeColor: '#8e44ad', wPx: 80, hPx: 45, label: 'Preparation' },
+      end_shape:          { strokeColor: '#c0392b', wPx: 60, hPx: 50, label: 'End' },
+      manual_input:       { strokeColor: '#2980b9', wPx: 80, hPx: 45, label: 'Manual Input' }
+    };
+
+    function copySelected() {
+      if (selectedShapes.length === 0) return;
+      clipboard = selectedShapes.map(s => {
+        const copy = JSON.parse(JSON.stringify(s));
+        if (s.type === 'image' && s.imgElement) {
+          copy.imgElement = s.imgElement;
+        }
+        return copy;
+      });
+    }
+
+    function pasteClipboard() {
+      if (clipboard.length === 0) return;
+      saveState();
+
+      const offset = gridPx; 
+      const newPastedShapes = [];
+
+      clipboard.forEach(item => {
+        const pasted = JSON.parse(JSON.stringify(item));
+        pasted.x += offset;
+        pasted.y += offset;
+
+        if (pasted.type === 'image' && item.imgElement) {
+          pasted.imgElement = item.imgElement;
+        } else if (pasted.type === 'image' && pasted.src) {
+          const img = new Image();
+          img.src = pasted.src;
+          pasted.imgElement = img;
+        }
+
+        shapes.push(pasted);
+        newPastedShapes.push(pasted);
+      });
+
+      selectedShapes = newPastedShapes;
+      
+      clipboard.forEach(c => {
+        c.x += offset;
+        c.y += offset;
+      });
+
+      updateEditPanel();
+      draw();
+    }
+
+    function saveState() {
+      const serializableShapes = shapes.map(s => {
+        if (s.type === 'image' && s.imgElement) {
+          const clone = { ...s };
+          delete clone.imgElement;
+          return clone;
+        }
+        return s;
+      });
+      undoStack.push(JSON.stringify(serializableShapes));
+      redoStack = []; 
+      updateUndoRedoUI();
+    }
+
+    function undo() {
+      if (undoStack.length > 0) {
+        redoStack.push(JSON.stringify(shapes));
+        restoreShapes(JSON.parse(undoStack.pop()));
+      }
+    }
+
+    function redo() {
+      if (redoStack.length > 0) {
+        undoStack.push(JSON.stringify(shapes));
+        restoreShapes(JSON.parse(redoStack.pop()));
+      }
+    }
+
+    function restoreShapes(parsedShapes) {
+      shapes = parsedShapes;
+      shapes.forEach(s => {
+        if (s.type === 'image' && s.src) {
+          const img = new Image();
+          img.src = s.src;
+          img.onload = () => draw();
+          s.imgElement = img;
+        }
+      });
+      selectedShapes = [];
+      updateEditPanel();
+      updateUndoRedoUI();
+      draw();
+    }
+
+    function updateUndoRedoUI() {
+      document.getElementById('undoBtn').disabled = undoStack.length === 0;
+      document.getElementById('redoBtn').disabled = redoStack.length === 0;
+    }
+
+    function alignSelected(type) {
+      if (selectedShapes.length < 2) return;
+      saveState();
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      selectedShapes.forEach(s => {
+        const bbox = getShapeBoundingBox(s);
+        if (bbox.minX < minX) minX = bbox.minX;
+        if (bbox.maxX > maxX) maxX = bbox.maxX;
+        if (bbox.minY < minY) minY = bbox.minY;
+        if (bbox.maxY > maxY) maxY = bbox.maxY;
+      });
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      selectedShapes.forEach(s => {
+        const w = s.w || 0;
+        const h = s.h || 0;
+
+        switch (type) {
+          case 'left': s.x = minX; break;
+          case 'center': s.x = centerX - w / 2; break;
+          case 'right': s.x = maxX - w; break;
+          case 'top': s.y = minY; break;
+          case 'middle': s.y = centerY - h / 2; break;
+          case 'bottom': s.y = maxY - h; break;
+        }
+      });
+
+      updateEditPanel();
+      draw();
+    }
+
+    async function saveProjectJson() {
+      const serializableShapes = shapes.map(s => {
+        if (s.type === 'image' && s.imgElement) {
+          const clone = { ...s };
+          delete clone.imgElement;
+          return clone;
+        }
+        return s;
+      });
+
+      const jsonStr = JSON.stringify(serializableShapes, null, 2);
+
+      if (currentFileHandle) {
+        try {
+          const writable = await currentFileHandle.createWritable();
+          await writable.write(jsonStr);
+          await writable.close();
+          return;
+        } catch (err) {
+          console.warn('Direct file overwrite failed, falling back to file picker.', err);
+        }
+      }
+
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'cad_layout_project.json',
+            types: [{ description: 'JSON Project File', accept: { 'application/json': ['.json'] } }]
+          });
+          currentFileHandle = handle;
+          const writable = await handle.createWritable();
+          await writable.write(jsonStr);
+          await writable.close();
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonStr);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "cad_layout_project.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function triggerJsonImport() {
+      document.getElementById('jsonLoader').click();
+    }
+
+    function handleJsonImport(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (!Array.isArray(parsed)) {
+            alert('Invalid project file structure.');
+            return;
+          }
+          saveState();
+          restoreShapes(parsed);
+          alert('Project loaded successfully!');
+        } catch (err) {
+          alert('Error parsing the JSON project file.');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    function createNewPage() {
+      if (shapes.length > 0 && !confirm('Create new layout? Unsaved work will be cleared.')) return;
+      saveState();
+      shapes = [];
+      selectedShapes = [];
+      currentFileHandle = null;
+      updateEditPanel();
+      draw();
+    }
+
+    function triggerImageUpload() {
+      document.getElementById('imageLoader').click();
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          saveState();
+          const w = img.width > 200 ? 200 : img.width;
+          const h = img.width > 200 ? (img.height * (200 / img.width)) : img.height;
+          const newShape = {
+            type: 'image',
+            x: snap(-panX / zoom + 100),
+            y: snap(-panY / zoom + 100),
+            w: w, h: h,
+            src: event.target.result,
+            imgElement: img, rotation: 0
+          };
+          shapes.push(newShape);
+          selectedShapes = [newShape];
+          updateEditPanel();
+          draw();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    }
+
+    async function exportToDWG() {
+      if (shapes.length === 0) { alert("Canvas is empty!"); return; }
+
+      let dxfContent = "0\nSECTION\n2\nENTITIES\n";
+
+      shapes.forEach(s => {
+        const x = s.x || 0;
+        const y = -(s.y || 0);
+        const w = s.w || 0;
+        const h = -(s.h || 0);
+
+        if (s.type === 'line' || s.type === 'arrow' || s.type === 'double_arrow') {
+          dxfContent += `0\nLINE\n8\n0\n10\n${x}\n20\n${y}\n30\n0.0\n11\n${x + w}\n21\n${y + h}\n31\n0.0\n`;
+        } else if (s.type === 'circle') {
+          const r = Math.abs(s.w / 2);
+          dxfContent += `0\nCIRCLE\n8\n0\n10\n${x + r}\n20\n${y - r}\n30\n0.0\n40\n${r}\n`;
+        } else if (s.type === 'text') {
+          dxfContent += `0\nTEXT\n8\n0\n10\n${x}\n20\n${y}\n30\n0.0\n40\n${s.fontSize || 16}\n1\n${s.label || ''}\n`;
+        } else {
+          dxfContent += `0\nPOLYLINE\n8\n0\n66\n1\n70\n1\n`;
+          dxfContent += `0\nVERTEX\n8\n0\n10\n${x}\n20\n${y}\n30\n0.0\n`;
+          dxfContent += `0\nVERTEX\n8\n0\n10\n${x + w}\n20\n${y}\n30\n0.0\n`;
+          dxfContent += `0\nVERTEX\n8\n0\n10\n${x + w}\n20\n${y + h}\n30\n0.0\n`;
+          dxfContent += `0\nVERTEX\n8\n0\n10\n${x}\n20\n${y + h}\n30\n0.0\n`;
+          dxfContent += `0\nSEQEND\n`;
+        }
+      });
+
+      dxfContent += "0\nENDSEC\n0\nEOF\n";
+
+      const dwgBlob = new Blob([dxfContent], { type: 'application/x-dwg' });
+
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'Standard_Work_Layout.dwg',
+            types: [{ description: 'AutoCAD DWG/DXF Drawing', accept: { 'application/x-dwg': ['.dwg', '.dxf'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(dwgBlob);
+          await writable.close();
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+
+      const dataStr = URL.createObjectURL(dwgBlob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "Standard_Work_Layout.dwg");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    async function exportToPDF() {
+      if (shapes.length === 0) { alert("Canvas is empty!"); return; }
+      
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      shapes.forEach(s => {
+        const box = getShapeBoundingBox(s);
+        if (box.minX < minX) minX = box.minX;
+        if (box.maxX > maxX) maxX = box.maxX;
+        if (box.minY < minY) minY = box.minY;
+        if (box.maxY > maxY) maxY = box.maxY;
+      });
+
+      const padding = 50;
+      minX -= padding; minY -= padding;
+      maxX += padding; maxY += padding;
+
+      const boundingWidth = Math.max(100, maxX - minX);
+      const boundingHeight = Math.max(100, maxY - minY);
+
+      const printCanvas = document.createElement('canvas');
+      printCanvas.width = boundingWidth * 2;
+      printCanvas.height = boundingHeight * 2;
+      const pCtx = printCanvas.getContext('2d');
+      
+      pCtx.scale(2, 2);
+      pCtx.fillStyle = '#ffffff'; // Set background strictly to pure white
+      pCtx.fillRect(0, 0, boundingWidth, boundingHeight);
+
+      shapes.forEach(s => {
+        pCtx.save();
+        pCtx.translate(-minX, -minY);
+        pCtx.strokeStyle = '#000000'; // Force all entity stroke colors to black
+        pCtx.lineWidth = s.lineWidth || 2;
+        if (s.lineStyle === 'dashed') pCtx.setLineDash([6, 4]);
+
+        const cx = s.x + (s.w || 0) / 2;
+        const cy = s.y + (s.h || 0) / 2;
+        if (s.rotation) {
+          pCtx.translate(cx, cy);
+          pCtx.rotate((s.rotation * Math.PI) / 180);
+          pCtx.translate(-cx, -cy);
+        }
+
+        const x = s.x, y = s.y, w = s.w || 0, h = s.h || 0;
+
+        if (s.type === 'linear_dimension') {
+          drawPdfLinearDimension(pCtx, s);
+        } else if (s.type === 'radius_measurement') {
+          drawPdfRadiusDimension(pCtx, s);
+        } else if (s.type === 'text') {
+          pCtx.fillStyle = '#000000'; // Force text color to black
+          pCtx.font = `${s.fontSize || 16}px sans-serif`;
+          pCtx.fillText(s.label !== undefined ? s.label : 'Text', x, y + 15);
+
+        } else if (s.type === 'image' && s.imgElement) {
+          pCtx.drawImage(s.imgElement, x, y, w, h);
+
+        } else if (s.type === 'rectangle' || s.type === 'process_shape') {
+          const r = s.radius ? Math.min(s.radius || 12, Math.abs(w)/2, Math.abs(h)/2) : 0;
+          pCtx.beginPath();
+          if (r > 0 && pCtx.roundRect) pCtx.roundRect(x, y, w, h, r);
+          else pCtx.rect(x, y, w, h);
+          pCtx.stroke();
+          if(s.type === 'process_shape') renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'pill') {
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w - h / 2, y);
+          pCtx.arc(x + w - h / 2, y + h / 2, h / 2, -Math.PI / 2, Math.PI / 2, false);
+          pCtx.lineTo(x, y + h); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'diamond') {
+          pCtx.beginPath(); pCtx.moveTo(x + w / 2, y); pCtx.lineTo(x + w, y + h / 2);
+          pCtx.lineTo(x + w / 2, y + h); pCtx.lineTo(x, y + h / 2); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'parallelogram') {
+          const shift = w * 0.25;
+          pCtx.beginPath(); pCtx.moveTo(x + shift, y); pCtx.lineTo(x + w, y);
+          pCtx.lineTo(x + w - shift, y + h); pCtx.lineTo(x, y + h); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'merge') {
+          pCtx.beginPath(); pCtx.moveTo(x + w / 2, y + h); pCtx.lineTo(x, y); pCtx.lineTo(x + w, y); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'database') {
+          pCtx.beginPath(); pCtx.ellipse(x + w/2, y + h*0.2, Math.abs(w/2), Math.abs(h*0.15), 0, 0, Math.PI*2); pCtx.stroke();
+          pCtx.beginPath(); pCtx.moveTo(x, y + h*0.2); pCtx.lineTo(x, y + h*0.8); pCtx.ellipse(x + w/2, y + h*0.8, Math.abs(w/2), Math.abs(h*0.15), 0, 0, Math.PI, false); pCtx.lineTo(x + w, y + h*0.2); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'terminal') {
+          const r = Math.min(Math.abs(w), Math.abs(h)) / 2;
+          pCtx.beginPath();
+          if (pCtx.roundRect) pCtx.roundRect(x, y, w, h, r);
+          else pCtx.rect(x, y, w, h);
+          pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'document_shape') {
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w, y); pCtx.lineTo(x + w, y + h * 0.8);
+          pCtx.bezierCurveTo(x + w * 0.75, y + h * 0.6, x + w * 0.25, y + h * 1.1, x, y + h * 0.8);
+          pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'multi_document') {
+          pCtx.beginPath(); pCtx.moveTo(x + 8, y); pCtx.lineTo(x + w, y); pCtx.lineTo(x + w, y + h * 0.7); pCtx.stroke();
+          pCtx.beginPath(); pCtx.moveTo(x + 4, y + 4); pCtx.lineTo(x + w - 4, y + 4); pCtx.lineTo(x + w - 4, y + h * 0.75); pCtx.stroke();
+          pCtx.beginPath(); pCtx.moveTo(x, y + 8); pCtx.lineTo(x + w - 8, y + 8); pCtx.lineTo(x + w - 8, y + h * 0.7);
+          pCtx.bezierCurveTo(x + (w - 8) * 0.75, y + h * 0.5, x + (w - 8) * 0.25, y + h, x, y + h * 0.8);
+          pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'preparation') {
+          const side = w * 0.2;
+          pCtx.beginPath(); pCtx.moveTo(x + side, y); pCtx.lineTo(x + w - side, y); pCtx.lineTo(x + w, y + h / 2);
+          pCtx.lineTo(x + w - side, y + h); pCtx.lineTo(x + side, y + h); pCtx.lineTo(x, y + h / 2); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'end_shape') {
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w); pCtx.lineTo(x + w, y + h * 0.7);
+          pCtx.lineTo(x + w / 2, y + h); pCtx.lineTo(x, y + h * 0.7); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'manual_input') {
+          pCtx.beginPath(); pCtx.moveTo(x, y + h * 0.25); pCtx.lineTo(x + w, y); pCtx.lineTo(x + w, y + h); pCtx.lineTo(x, y + h); pCtx.closePath(); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'circle') {
+          pCtx.beginPath(); pCtx.ellipse(x + w/2, y + h/2, Math.abs(w/2), Math.abs(h/2), 0, 0, Math.PI * 2); pCtx.stroke();
+
+        } else if (s.type === 'line' || s.type === 'arrow' || s.type === 'double_arrow') {
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w, y + h); pCtx.stroke();
+          
+          if (s.type === 'arrow' || s.type === 'double_arrow') {
+            const angle = Math.atan2(h, w);
+            const headlen = 10;
+            pCtx.beginPath(); pCtx.moveTo(x + w, y + h);
+            pCtx.lineTo(x + w - headlen * Math.cos(angle - Math.PI / 6), y + h - headlen * Math.sin(angle - Math.PI / 6));
+            pCtx.lineTo(x + w - headlen * Math.cos(angle + Math.PI / 6), y + h - headlen * Math.sin(angle + Math.PI / 6));
+            pCtx.closePath(); pCtx.fillStyle = '#000000'; pCtx.fill();
+          }
+
+          if (s.type === 'double_arrow') {
+            const angle = Math.atan2(h, w);
+            const headlen = 10;
+            pCtx.beginPath(); pCtx.moveTo(x, y);
+            pCtx.lineTo(x + headlen * Math.cos(angle - Math.PI / 6), y + headlen * Math.sin(angle - Math.PI / 6));
+            pCtx.lineTo(x + headlen * Math.cos(angle + Math.PI / 6), y + headlen * Math.sin(angle + Math.PI / 6));
+            pCtx.closePath(); pCtx.fillStyle = '#000000'; pCtx.fill();
+          }
+
+        } else if (s.type === 'elbow') {
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w / 2, y); pCtx.lineTo(x + w / 2, y + h); pCtx.lineTo(x + w, y + h); pCtx.stroke();
+
+        } else if (s.type === 'quality') {
+          pCtx.beginPath(); pCtx.moveTo(x + w/2, y); pCtx.lineTo(x + w, y + h/2); pCtx.lineTo(x + w/2, y + h); pCtx.lineTo(x, y + h/2);
+          pCtx.closePath(); pCtx.stroke(); renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'safety') {
+          const w3 = w / 3, h3 = h / 3;
+          pCtx.beginPath(); pCtx.moveTo(x + w3, y); pCtx.lineTo(x + 2 * w3, y); pCtx.lineTo(x + 2 * w3, y + h3);
+          pCtx.lineTo(x + w, y + h3); pCtx.lineTo(x + w, y + 2 * h3); pCtx.lineTo(x + 2 * w3, y + 2 * h3);
+          pCtx.lineTo(x + 2 * w3, y + h); pCtx.lineTo(x + w3, y + h); pCtx.lineTo(x + w3, y + 2 * h3);
+          pCtx.lineTo(x, y + 2 * h3); pCtx.lineTo(x, y + h3); pCtx.lineTo(x + w3, y + h3);
+          pCtx.closePath(); pCtx.stroke(); renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'wip') {
+          pCtx.beginPath(); pCtx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); pCtx.stroke();
+          pCtx.save(); pCtx.beginPath(); pCtx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); pCtx.clip();
+          const lineSpacing = 10;
+          pCtx.beginPath();
+          for (let offset = -Math.max(w, h) * 2; offset < Math.max(w, h) * 2; offset += lineSpacing) {
+            pCtx.moveTo(x + offset, y + h * 2); pCtx.lineTo(x + offset + w * 2, y - h);
+          }
+          pCtx.stroke(); pCtx.restore(); renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'input_fg') {
+          pCtx.beginPath(); pCtx.rect(x, y, w, h); pCtx.stroke();
+          pCtx.beginPath(); pCtx.moveTo(x, y); pCtx.lineTo(x + w, y + h); pCtx.moveTo(x + w, y); pCtx.lineTo(x, y + h); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'operator') {
+          const cxP = x + w / 2, cyP = y + h / 2, r = Math.min(Math.abs(w), Math.abs(h)) / 3;
+          pCtx.beginPath(); pCtx.arc(cxP, cyP, r, 0, Math.PI * 2); pCtx.stroke();
+          pCtx.beginPath(); pCtx.arc(cxP, cyP + r * 0.2, r * 1.5, 0.1 * Math.PI, 0.9 * Math.PI, false); pCtx.stroke();
+          pCtx.beginPath(); pCtx.arc(cxP, cyP - r * 0.2, r * 0.5, 0, Math.PI * 2); pCtx.stroke();
+          renderPdfLabel(pCtx, s);
+
+        } else if (s.type === 'next_process') {
+          const ah = h / 3, aw = w / 3;
+          pCtx.beginPath(); pCtx.moveTo(x, y + ah); pCtx.lineTo(x + 2 * aw, y + ah); pCtx.lineTo(x + 2 * aw, y);
+          pCtx.lineTo(x + w, y + h / 2); pCtx.lineTo(x + 2 * aw, y + h); pCtx.lineTo(x + 2 * aw, y + 2 * ah);
+          pCtx.lineTo(x, y + 2 * ah); pCtx.closePath(); pCtx.stroke(); renderPdfLabel(pCtx, s);
+        }
+
+        pCtx.restore();
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF(boundingWidth > boundingHeight ? 'landscape' : 'portrait', 'pt', [boundingWidth, boundingHeight]);
+      const imgData = printCanvas.toDataURL('image/png');
+      pdf.addImage(imgData, 'PNG', 0, 0, boundingWidth, boundingHeight);
+      
+      const pdfBlob = pdf.output('blob');
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: 'Standard_Work_Layout.pdf',
+            types: [{ description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(pdfBlob);
+          await writable.close();
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+      pdf.save('Standard_Work_Layout.pdf');
+    }
+
+    function drawPdfArrowHead(pCtx,x1,y1,x2,y2,size){
+      const a=Math.atan2(y2-y1,x2-x1);
+      pCtx.beginPath(); pCtx.moveTo(x2,y2);
+      pCtx.lineTo(x2-size*Math.cos(a-Math.PI/6),y2-size*Math.sin(a-Math.PI/6));
+      pCtx.lineTo(x2-size*Math.cos(a+Math.PI/6),y2-size*Math.sin(a+Math.PI/6));
+      pCtx.closePath(); pCtx.fill();
+    }
+    function drawPdfLinearDimension(pCtx,s){
+      const p1=s.p1||{x:s.x,y:s.y}, p2=s.p2||{x:s.x+s.w,y:s.y+s.h};
+      const L=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
+      const horizontal=s.horizontal!==undefined?s.horizontal:Math.abs(p2.x-p1.x)>=Math.abs(p2.y-p1.y);
+      const off=s.offset||30;
+      pCtx.save(); pCtx.strokeStyle='#000'; pCtx.fillStyle='#000'; pCtx.lineWidth=Math.max(1,s.lineWidth||1.5);
+      pCtx.setLineDash([]); pCtx.font=`${Math.max(8,s.fontSize||14)}px sans-serif`;
+      if(horizontal){
+        const yy=(p1.y+p2.y)/2+off;
+        pCtx.beginPath(); pCtx.moveTo(p1.x,p1.y); pCtx.lineTo(p1.x,yy); pCtx.moveTo(p2.x,p2.y); pCtx.lineTo(p2.x,yy); pCtx.moveTo(p1.x,yy); pCtx.lineTo(p2.x,yy); pCtx.stroke();
+        drawPdfArrowHead(pCtx,p2.x,yy,p1.x,yy,8); drawPdfArrowHead(pCtx,p1.x,yy,p2.x,yy,8);
+        pCtx.textAlign='center'; pCtx.textBaseline='bottom'; pCtx.fillText(`${pxToUnit(L)}${scaleUnit}`,(p1.x+p2.x)/2,yy-5);
+      } else {
+        const xx=(p1.x+p2.x)/2+off;
+        pCtx.beginPath(); pCtx.moveTo(p1.x,p1.y); pCtx.lineTo(xx,p1.y); pCtx.moveTo(p2.x,p2.y); pCtx.lineTo(xx,p2.y); pCtx.moveTo(xx,p1.y); pCtx.lineTo(xx,p2.y); pCtx.stroke();
+        drawPdfArrowHead(pCtx,xx,p2.y,xx,p1.y,8); drawPdfArrowHead(pCtx,xx,p1.y,xx,p2.y,8);
+        pCtx.save(); pCtx.translate(xx,(p1.y+p2.y)/2); pCtx.rotate(-Math.PI/2); pCtx.textAlign='center'; pCtx.textBaseline='bottom'; pCtx.fillText(`${pxToUnit(L)}${scaleUnit}`,0,-5); pCtx.restore();
+      }
+      pCtx.restore();
+    }
+    function drawPdfRadiusDimension(pCtx,s){
+      const cx=s.cx!==undefined?s.cx:s.x, cy=s.cy!==undefined?s.cy:s.y;
+      const ex=s.ex!==undefined?s.ex:cx+(s.radius||s.w||0), ey=s.ey!==undefined?s.ey:cy;
+      pCtx.save(); pCtx.strokeStyle='#000'; pCtx.fillStyle='#000'; pCtx.lineWidth=Math.max(1,s.lineWidth||1.5); pCtx.font=`${Math.max(8,s.fontSize||14)}px sans-serif`;
+      pCtx.beginPath(); pCtx.moveTo(cx,cy); pCtx.lineTo(ex,ey); pCtx.stroke(); drawPdfArrowHead(pCtx,ex,ey,cx,cy,8);
+      pCtx.textAlign='left'; pCtx.textBaseline='bottom'; pCtx.fillText(`R ${pxToUnit(s.radius||Math.hypot(ex-cx,ey-cy))}${scaleUnit}`,ex+7,ey-7);
+      pCtx.restore();
+    }
+
+    function renderPdfLabel(pCtx, s) {
+      pCtx.fillStyle = '#000000'; // Force label color to black in exported PDF
+      pCtx.font = '11px sans-serif';
+      pCtx.textAlign = 'center';
+      pCtx.fillText(s.label !== undefined ? s.label : s.type, s.x + s.w / 2, s.y - 6);
+    }
+
+    // V3: touch support for phones/tablets. Single finger behaves like the mouse;
+    // two fingers perform pinch-to-zoom without triggering browser scrolling.
+    let touchPinchStartDistance = null;
+    let touchPinchStartZoom = 1;
+
+    // V11: constrained dimension dragging state.
+    let dimensionDrag = null;
+
+    function getTouchDistance(t1, t2) {
+      return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    }
+
+    function dispatchTouchMouse(type, touch) {
+      if (!touch) return;
+      const ev = new MouseEvent(type, {
+        bubbles: true, cancelable: true, view: window, button: 0,
+        clientX: touch.clientX, clientY: touch.clientY
+      });
+      canvas.dispatchEvent(ev);
+    }
+
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches.length >= 2) {
+        touchPinchStartDistance = getTouchDistance(e.touches[0], e.touches[1]);
+        touchPinchStartZoom = zoom;
+        if (isDrawing) {
+          finishDrawing();
+        }
+        return;
+      }
+      dispatchTouchMouse('mousedown', e.touches[0]);
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length >= 2) {
+        if (!touchPinchStartDistance) {
+          touchPinchStartDistance = getTouchDistance(e.touches[0], e.touches[1]);
+          touchPinchStartZoom = zoom;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const cx = ((e.touches[0].clientX + e.touches[1].clientX) / 2) - rect.left;
+        const cy = ((e.touches[0].clientY + e.touches[1].clientY) / 2) - rect.top;
+        const newZoom = Math.max(0.1, Math.min(8, touchPinchStartZoom * (getTouchDistance(e.touches[0], e.touches[1]) / touchPinchStartDistance)));
+        panX = cx - (cx - panX) * (newZoom / zoom);
+        panY = cy - (cy - panY) * (newZoom / zoom);
+        zoom = newZoom;
+        draw();
+        return;
+      }
+      dispatchTouchMouse('mousemove', e.touches[0]);
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 0) {
+        touchPinchStartDistance = null;
+        dispatchTouchMouse('mouseup', e.changedTouches[0]);
+      } else if (e.touches.length === 1) {
+        touchPinchStartDistance = null;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      touchPinchStartDistance = null;
+      if (isDrawing) finishDrawing();
+      if (isPanning) { isPanning = false; }
+    }, { passive: false });
+
+    function resizeCanvas() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    document.getElementById('scaleRatio').addEventListener('change', (e) => { scaleRatio = parseFloat(e.target.value) || 1; updateScaleDisplay(); updateEditPanel(); draw(); });
+    document.getElementById('scaleUnit').addEventListener('change', (e) => { scaleUnit = e.target.value; updateScaleDisplay(); updateEditPanel(); refreshDimensionInputHud(); draw(); });
+    document.getElementById('gridPx').addEventListener('change', (e) => { gridPx = parseInt(e.target.value) || 40; updateScaleDisplay(); updateEditPanel(); draw(); });
+    document.getElementById('snapGrid').addEventListener('change', (e) => { snapToGrid = e.target.checked; });
+
+    function updateScaleDisplay() {
+      document.getElementById('scaleDisplay').innerText = `1 Sq = ${scaleRatio.toFixed(2)} ${scaleUnit}`;
+    }
+
+    function setMode(mode) {
+      finishDrawing();
+      currentMode = mode;
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tool === mode);
+      });
+      canvas.style.cursor = mode === 'pan' ? 'grab' : (mode === 'linear_dimension' || mode === 'radius_measure' || mode === 'offset' ? 'copy' : 'crosshair');
+      updateInstructionPrompt(mode);
+      if (DIMENSION_DRAW_TOOLS.has(mode)) {
+        buildDimensionInputHud(mode);
+        positionDimensionInputHud(canvas.width * 0.5, canvas.height * 0.5);
+      } else {
+        hideDimensionInputHud();
+      }
+    }
+
+    function buildDimensionInputHud(mode) {
+      const defs = {
+        line:      {title:'Line — Exact Length', fields:[['length','L','Length']]},
+        arrow:     {title:'Arrow — Exact Length', fields:[['length','L','Length']]},
+        double_arrow:{title:'Double Arrow — Exact Length', fields:[['length','L','Length']]},
+        rectangle: {title:'Rectangle — Exact Size', fields:[['length','L','Length'],['width','W','Width']]},
+        circle:    {title:'Circle — Exact Radius', fields:[['radius','R','Radius']]}
+      };
+      const def=defs[mode];
+      if(!def){ hideDimensionInputHud(); return; }
+      dimHudTitle.textContent=def.title;
+      dimHudFields.innerHTML='';
+      dimensionInputs={};
+
+      def.fields.forEach(([key,label,ph], index)=>{
+        const row=document.createElement('div'); row.className='dim-row';
+        const lab=document.createElement('label'); lab.textContent=label+':';
+        const input=document.createElement('input');
+        input.type='number'; input.min='0'; input.step='any'; input.placeholder=ph;
+        input.autocomplete='off'; input.inputMode='decimal';
+        const unit=document.createElement('span'); unit.className='dim-unit'; unit.textContent=scaleUnit;
+        row.append(lab,input,unit); dimHudFields.appendChild(row);
+        dimensionInputs[key]={input,unit};
+
+        input.addEventListener('input',()=>{
+          exactDimensionArmed=false;
+          updateDimensionDrivenPreview();
+        });
+
+        input.addEventListener('keydown',(e)=>{
+          if(e.key==='Enter'){
+            e.preventDefault();
+            e.stopPropagation();
+            handleDimensionEnter(key);
+          } else if(e.key==='Escape'){
+            e.preventDefault();
+            e.stopPropagation();
+            exactDimensionArmed=false;
+            hideDimensionInputHud();
+          }
+        });
+      });
+
+      dimHudApply.onclick=(e)=>{
+        if(e){ e.preventDefault(); e.stopPropagation(); }
+        commitOrArmExactDimensions();
+      };
+
+      dimensionInputHud.style.display='block';
+      refreshDimensionInputHud();
+      // Focus the first field automatically so typing can start immediately.
+      const first=dimensionInputs[def.fields[0][0]]?.input;
+      if(first){ setTimeout(()=>{ first.focus(); first.select(); },0); }
+    }
+
+    function handleDimensionEnter(key){
+      if(!hasCompleteExactDimensions()){
+        const keys=Object.keys(dimensionInputs);
+        const idx=keys.indexOf(key);
+        const nextKey=keys.slice(idx+1).find(k=>getDimensionInputValue(k)===null) || keys.find(k=>getDimensionInputValue(k)===null);
+        if(nextKey){
+          dimensionInputs[nextKey].input.focus();
+          dimensionInputs[nextKey].input.select();
+        }
+        return;
+      }
+      commitOrArmExactDimensions();
+    }
+
+    // Keyboard fallback: some browsers/mobile keyboards do not deliver Enter
+    // consistently to a dynamically-created number input. Capture it at the
+    // document level while the exact-dimension editor is active.
+    document.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter') return;
+      if(!DIMENSION_DRAW_TOOLS.has(currentMode)) return;
+      if(dimensionInputHud.style.display === 'none') return;
+      if(!hasCompleteExactDimensions()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      commitOrArmExactDimensions();
+    }, true);
+
+    function commitOrArmExactDimensions(){
+      if(!hasCompleteExactDimensions()){
+        const missing=Object.keys(dimensionInputs).find(k=>getDimensionInputValue(k)===null);
+        if(missing){
+          dimensionInputs[missing].input.focus();
+          dimensionInputs[missing].input.select();
+        }
+        return;
+      }
+
+      // If drawing has already started, Enter/Apply finishes it immediately.
+      if(isDrawing && selectedShapes.length===1){
+        updateDimensionDrivenPreview();
+        commitDimensionDrawing();
+        return;
+      }
+
+      // Otherwise, store the entered values and arm the exact-size command.
+      // The popup closes now. The next canvas click establishes the start
+      // point and mouse movement only controls direction/orientation.
+      exactDimensionArmed=true;
+      hideDimensionInputHud();
+      updateCursorHud(0,0,null);
+      draw();
+    }
+
+    function refreshDimensionInputHud(){
+      Object.values(dimensionInputs).forEach(o=>o.unit.textContent=scaleUnit);
+      if(DIMENSION_DRAW_TOOLS.has(currentMode) && !exactDimensionArmed) dimensionInputHud.style.display='block';
+    }
+
+    function hideDimensionInputHud(){
+      dimensionInputHud.style.display='none';
+    }
+
+    function positionDimensionInputHud(mouseX,mouseY){
+      if(dimensionInputHud.style.display==='none') return;
+      const pad=12, maxX=Math.max(0,container.clientWidth-dimensionInputHud.offsetWidth-pad), maxY=Math.max(0,container.clientHeight-dimensionInputHud.offsetHeight-pad);
+      dimensionInputHud.style.left=Math.min(mouseX+18,maxX)+'px';
+      dimensionInputHud.style.top=Math.min(mouseY+18,maxY)+'px';
+    }
+
+    function getDimensionInputValue(key){
+      const v=parseFloat(dimensionInputs[key]?.input?.value);
+      return Number.isFinite(v) && v>0 ? v : null;
+    }
+
+    function updateDimensionDrivenPreview(){
+      if(!isDrawing || selectedShapes.length!==1 || !DIMENSION_DRAW_TOOLS.has(currentMode)) return;
+      const s=selectedShapes[0];
+      const dx=currentMouseWorld.x-startX, dy=currentMouseWorld.y-startY;
+      const ang=Math.atan2(dy,dx);
+      if(currentMode==='circle'){
+        const r=getDimensionInputValue('radius');
+        if(r!==null){ const rp=unitToPx(r); s.x=startX-rp; s.y=startY-rp; s.w=rp*2; s.h=rp*2; s.radius=rp; }
+      } else if(['line','arrow','double_arrow'].includes(currentMode)){
+        const L=getDimensionInputValue('length');
+        if(L!==null){ const lp=unitToPx(L); const a=Number.isFinite(ang)?ang:0; s.x=startX; s.y=startY; s.w=lp*Math.cos(a); s.h=lp*Math.sin(a); }
+      } else if(currentMode==='rectangle'){
+        const L=getDimensionInputValue('length'), W=getDimensionInputValue('width');
+        if(L!==null && W!==null){
+          const sx=dx<0?-1:1, sy=dy<0?-1:1; const wp=unitToPx(L), hp=unitToPx(W);
+          s.x=startX; s.y=startY; s.w=sx*wp; s.h=sy*hp;
+        }
+      }
+      draw();
+    }
+
+    function hasCompleteExactDimensions(){
+      if(!DIMENSION_DRAW_TOOLS.has(currentMode)) return false;
+      if(currentMode==='circle') return getDimensionInputValue('radius')!==null;
+      if(currentMode==='rectangle') return getDimensionInputValue('length')!==null && getDimensionInputValue('width')!==null;
+      return getDimensionInputValue('length')!==null;
+    }
+
+    function commitDimensionDrawing(){
+      if(!isDrawing || selectedShapes.length!==1) return false;
+      if(DIMENSION_DRAW_TOOLS.has(currentMode) && !hasCompleteExactDimensions()) return false;
+      updateDimensionDrivenPreview();
+      const s=selectedShapes[0];
+      if(Math.abs(s.w)<=2 && Math.abs(s.h)<=2) return false;
+      if(SYMBOL_DEFAULTS[s.type]) s.strokeColor=SYMBOL_DEFAULTS[s.type].strokeColor; else s.strokeColor='#ffffff';
+      shapes.push(s);
+      isDrawing=false; currentStartPoint=null; selectedShapes=[s];
+      exactDimensionArmed=false;
+      hideDimensionInputHud();
+      updateCursorHud(0, 0, null);
+      updateEditPanel(); draw();
+      return true;
+    }
+
+    function finishDrawing() {
+      if (isDrawing && selectedShapes.length === 1) {
+        shapes = shapes.filter(s => s !== selectedShapes[0]);
+      }
+      isDrawing = false;
+      isDragging = false;
+      dimensionDrag = null;
+      isRotating = false;
+      isBoxSelecting = false;
+      isPanning = false;
+      currentStartPoint = null;
+      linearDimStart = null;
+      linearDimPreview = null;
+      activeMeasureInfo = null;
+      selectedShapes = [];
+      exactDimensionArmed = false;
+      updateCursorHud(0, 0, null);
+      hideDimensionInputHud();
+    }
+
+    function clearCanvas() {
+      if (confirm('Clear drawing?')) {
+        saveState();
+        shapes = [];
+        selectedShapes = [];
+        updateEditPanel();
+        draw();
+      }
+    }
+
+    function snap(val) { return snapToGrid ? Math.round(val / gridPx) * gridPx : val; }
+    function pxToUnit(px) { return ((Math.abs(px) / gridPx) * scaleRatio).toFixed(2); }
+    function unitToPx(units) { return (units / scaleRatio) * gridPx; }
+
+    function performCadOffset(targetShape, clickWorldPt) {
+      const distUnits = parseFloat(document.getElementById('offsetDistanceInput').value) || 0.5;
+      const distPx = unitToPx(distUnits);
+      if (distPx <= 0) return;
+
+      saveState();
+      const newShape = JSON.parse(JSON.stringify(targetShape));
+      delete newShape.imgElement;
+
+      const cx = targetShape.x + targetShape.w / 2;
+      const cy = targetShape.y + targetShape.h / 2;
+
+      if (['line', 'arrow', 'double_arrow'].includes(targetShape.type)) {
+        const dx = targetShape.w;
+        const dy = targetShape.h;
+        const len = Math.hypot(dx, dy);
+        if (len === 0) return;
+
+        let nx = -dy / len;
+        let ny = dx / len;
+
+        const midX = targetShape.x + dx / 2;
+        const midY = targetShape.y + dy / 2;
+        const testDot = (clickWorldPt.x - midX) * nx + (clickWorldPt.y - midY) * ny;
+        if (testDot < 0) { nx = -nx; ny = -ny; }
+
+        newShape.x += nx * distPx;
+        newShape.y += ny * distPx;
+
+      } else if (targetShape.type === 'circle') {
+        const rad = Math.abs(targetShape.w / 2);
+        const distToCenter = Math.hypot(clickWorldPt.x - cx, clickWorldPt.y - cy);
+        const isOutward = distToCenter >= rad;
+
+        let newRad = isOutward ? rad + distPx : rad - distPx;
+        if (newRad < 2) newRad = 2;
+
+        newShape.w = newRad * 2;
+        newShape.h = newRad * 2;
+        newShape.x = cx - newRad;
+        newShape.y = cy - newRad;
+
+      } else {
+        const isOutward = (
+          clickWorldPt.x < targetShape.x ||
+          clickWorldPt.x > targetShape.x + targetShape.w ||
+          clickWorldPt.y < targetShape.y ||
+          clickWorldPt.y > targetShape.y + targetShape.h
+        );
+
+        const delta = isOutward ? distPx : -distPx;
+        if (targetShape.w + delta * 2 > 4 && targetShape.h + delta * 2 > 4) {
+          newShape.x -= delta;
+          newShape.y -= delta;
+          newShape.w += delta * 2;
+          newShape.h += delta * 2;
+        } else {
+          return;
+        }
+      }
+
+      shapes.push(newShape);
+      selectedShapes = [newShape];
+      updateEditPanel();
+      draw();
+    }
+
+    function getShapeCenter(s) {
+      return { x: s.x + (s.w || 0) / 2, y: s.y + (s.h || 0) / 2 };
+    }
+
+    function getShapeBoundingBox(s) {
+      if (s.type === 'linear_dimension') {
+        const p1 = s.p1 || {x:s.x||0,y:s.y||0};
+        const p2 = s.p2 || {x:(s.x||0)+(s.w||0),y:(s.y||0)+(s.h||0)};
+        const off = s.offset || 30;
+        const horizontal = s.horizontal !== undefined ? s.horizontal : Math.abs(p2.x-p1.x) >= Math.abs(p2.y-p1.y);
+        if (horizontal) {
+          const yy = (p1.y+p2.y)/2 + off;
+          return {minX:Math.min(p1.x,p2.x)-20, maxX:Math.max(p1.x,p2.x)+20, minY:Math.min(p1.y,p2.y,yy)-20, maxY:Math.max(p1.y,p2.y,yy)+20};
+        }
+        const xx = (p1.x+p2.x)/2 + off;
+        return {minX:Math.min(p1.x,p2.x,xx)-20, maxX:Math.max(p1.x,p2.x,xx)+20, minY:Math.min(p1.y,p2.y)-20, maxY:Math.max(p1.y,p2.y)+20};
+      }
+      if (s.type === 'radius_measurement') {
+        const cx=s.cx!==undefined?s.cx:s.x||0, cy=s.cy!==undefined?s.cy:s.y||0;
+        const ex=s.ex!==undefined?s.ex:cx+(s.radius||s.w||0), ey=s.ey!==undefined?s.ey:cy;
+        return {minX:Math.min(cx,ex)-25,maxX:Math.max(cx,ex)+60,minY:Math.min(cy,ey)-25,maxY:Math.max(cy,ey)+25};
+      }
+      const minX = Math.min(s.x, s.x + (s.w || 0));
+      const maxX = Math.max(s.x, s.x + (s.w || 0));
+      const minY = Math.min(s.y, s.y + (s.h || 0));
+      const maxY = Math.max(s.y, s.y + (s.h || 0));
+      return { minX, maxX, minY, maxY };
+    }
+
+    function computeGapAndCenterDistance(s1, s2) {
+      const c1 = getShapeCenter(s1);
+      const c2 = getShapeCenter(s2);
+      const centerDistPx = Math.hypot(c2.x - c1.x, c2.y - c1.y);
+
+      const b1 = getShapeBoundingBox(s1);
+      const b2 = getShapeBoundingBox(s2);
+
+      const dx = Math.max(0, b1.minX - b2.maxX, b2.minX - b1.maxX);
+      const dy = Math.max(0, b1.minY - b2.maxY, b2.minY - b1.maxX);
+      const edgeGapPx = Math.hypot(dx, dy);
+
+      return {
+        centerDist: pxToUnit(centerDistPx),
+        edgeGap: pxToUnit(edgeGapPx),
+        c1, c2, b1, b2
+      };
+    }
+
+    function toWorldCoords(screenX, screenY) {
+      return { x: (screenX - panX) / zoom, y: (screenY - panY) / zoom };
+    }
+
+    function toScreenCoords(worldX, worldY) {
+      return { x: worldX * zoom + panX, y: worldY * zoom + panY };
+    }
+
+    function getShapeDisplayType(shape) {
+      if (!shape) return '';
+      if (SYMBOL_DEFAULTS[shape.type]) return shape.type;
+      return shape.type;
+    }
+
+    function updateEditPanel() {
+      const panel = document.getElementById('editPanel');
+      
+      if (activeMeasureInfo) {
+        panel.innerHTML = `<span style="color:#00ffcc; font-size:0.75rem; font-weight:bold;">MEASUREMENT:</span>
+          <span style="font-size:0.75rem; color:#fff;">${activeMeasureInfo}</span>`;
+        return;
+      }
+
+      if (selectedShapes.length === 0) {
+        panel.innerHTML = `<span style="font-size:0.75rem; color:#888;">No Selection</span>`;
+        return;
+      }
+      
+      if (selectedShapes.length > 1) {
+        panel.innerHTML = `<span style="color:#00ffcc; font-size:0.75rem; font-weight:bold;">${selectedShapes.length} Selected</span>
+          <button class="danger" onclick="deleteSelected()" style="padding:4px 8px;">Del All</button>`;
+        return;
+      }
+
+      const selectedShape = selectedShapes[0];
+      const displayType = getShapeDisplayType(selectedShape);
+      let html = `<span style="color:#00ffcc; font-size:0.75rem; font-weight:bold;">${displayType.toUpperCase()}</span>`;
+      
+      if (selectedShape.type !== 'image') {
+        html += `<div class="inspector-field"><label>Text</label><input type="text" id="editLabel" value="${selectedShape.label !== undefined ? selectedShape.label : ''}" style="width:110px;"></div>`;
+        html += `<div class="inspector-field"><label>Color</label><input type="color" id="editColor" value="${selectedShape.strokeColor || '#ffffff'}"></div>`;
+        html += `<div class="inspector-field"><label>Thick</label><input type="number" id="editLineWidth" value="${selectedShape.lineWidth || 2}" min="1" max="20" style="width:45px;"></div>`;
+        html += `<div class="inspector-field"><label>Style</label><select id="editLineStyle">
+            <option value="solid" ${selectedShape.lineStyle === 'dashed' ? '' : 'selected'}>Solid</option>
+            <option value="dashed" ${selectedShape.lineStyle === 'dashed' ? 'selected' : ''}>Dashed</option>
+          </select></div>`;
+      }
+
+      if (selectedShape.type === 'rectangle') {
+        html += `<div class="inspector-field"><label>Fillet/Rad</label><input type="number" id="editRadius" value="${selectedShape.radius || 0}" min="0" max="100" style="width:50px;"></div>`;
+      }
+
+      if (selectedShape.type === 'circle') {
+        const rad = Math.abs(selectedShape.w / 2);
+        html += `<div class="inspector-field"><label>Radius</label><input type="number" id="editRadius" value="${pxToUnit(rad)}" step="0.1" style="width:55px;"></div>`;
+      } else {
+        html += `<div class="inspector-field"><label>Rot°</label><input type="number" id="editRotation" value="${selectedShape.rotation || 0}" min="0" max="360" style="width:50px;"></div>`;
+      }
+
+      if (selectedShape.type === 'text' || selectedShape.type === 'linear_dimension' || selectedShape.type === 'radius_measurement') {
+        html += `<div class="inspector-field"><label>Font</label><input type="number" id="editFontSize" value="${selectedShape.fontSize || 14}" min="8" max="96" style="width:55px;"></div>`;
+      }
+
+      if (selectedShape.type === 'linear_dimension') {
+        html += `<div class="inspector-field"><label>Dim Offset</label><input type="number" id="editDimOffset" value="${Math.round(selectedShape.offset || 30)}" min="-500" max="500" style="width:60px;"></div>`;
+      }
+
+      if (selectedShape.type !== 'text' && selectedShape.type !== 'linear_dimension' && selectedShape.type !== 'radius_measurement' && selectedShape.type !== 'circle') {
+        html += `<div class="inspector-field"><label>Width</label><input type="number" id="editWidth" value="${pxToUnit(selectedShape.w)}" step="0.1" style="width:55px;"></div>`;
+        html += `<div class="inspector-field"><label>Height</label><input type="number" id="editHeight" value="${pxToUnit(selectedShape.h)}" step="0.1" style="width:55px;"></div>`;
+      }
+
+      html += `<button class="danger" onclick="deleteSelected()" style="padding:4px 8px; margin-left:auto;">Delete</button>`;
+      panel.innerHTML = html;
+
+      if (document.getElementById('editLabel')) {
+        document.getElementById('editLabel').addEventListener('input', (e) => { selectedShape.label = e.target.value; draw(); });
+      }
+      if (document.getElementById('editColor')) {
+        document.getElementById('editColor').addEventListener('input', (e) => { selectedShape.strokeColor = e.target.value; draw(); });
+      }
+      if (document.getElementById('editLineWidth')) {
+        document.getElementById('editLineWidth').addEventListener('change', (e) => { saveState(); selectedShape.lineWidth = parseInt(e.target.value) || 2; draw(); });
+      }
+      if (document.getElementById('editLineStyle')) {
+        document.getElementById('editLineStyle').addEventListener('change', (e) => { saveState(); selectedShape.lineStyle = e.target.value; draw(); });
+      }
+
+      if (document.getElementById('editRadius')) {
+        document.getElementById('editRadius').addEventListener('change', (e) => {
+          saveState(); 
+          if (selectedShape.type === 'circle') {
+            const rPx = unitToPx(parseFloat(e.target.value) || 1);
+            selectedShape.w = rPx * 2;
+            selectedShape.h = rPx * 2;
+          } else {
+            selectedShape.radius = Math.max(0, parseInt(e.target.value) || 0); 
+          }
+          draw(); 
+        });
+      }
+
+      if (document.getElementById('editRotation')) {
+        document.getElementById('editRotation').addEventListener('change', (e) => {
+          saveState();
+          let deg = parseInt(e.target.value) || 0;
+          selectedShape.rotation = (deg % 360 + 360) % 360;
+          draw();
+        });
+      }
+
+      if (document.getElementById('editFontSize')) {
+        document.getElementById('editFontSize').addEventListener('change', (e) => { saveState(); selectedShape.fontSize = Math.max(8, Math.min(96, parseInt(e.target.value) || 14)); draw(); });
+      }
+      if (document.getElementById('editDimOffset')) {
+        document.getElementById('editDimOffset').addEventListener('change', (e) => { saveState(); selectedShape.offset = parseFloat(e.target.value) || 0; draw(); });
+      }
+
+      if (document.getElementById('editWidth')) {
+        document.getElementById('editWidth').addEventListener('input', (e) => {
+          const val = parseFloat(e.target.value);
+          if (!isNaN(val) && val > 0) {
+            const newPx = unitToPx(val);
+            selectedShape.w = selectedShape.w < 0 ? -newPx : newPx;
+            draw();
+          }
+        });
+        document.getElementById('editWidth').addEventListener('change', () => saveState());
+      }
+
+      if (document.getElementById('editHeight')) {
+        document.getElementById('editHeight').addEventListener('input', (e) => {
+          const val = parseFloat(e.target.value);
+          if (!isNaN(val) && val > 0) {
+            const newPx = unitToPx(val);
+            selectedShape.h = selectedShape.h < 0 ? -newPx : newPx;
+            draw();
+          }
+        });
+        document.getElementById('editHeight').addEventListener('change', () => saveState());
+      }
+    }
+
+    function deleteSelected() {
+      if (selectedShapes.length > 0) {
+        saveState();
+        shapes = shapes.filter(s => !selectedShapes.includes(s));
+        selectedShapes = [];
+        updateEditPanel();
+        draw();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveProjectJson();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setMode('select');
+        selectedShapes = [...shapes];
+        updateEditPanel();
+        draw();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        copySelected();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteClipboard();
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'o') {
+        setMode('offset');
+        return;
+      }
+
+      if (e.key === 'Escape') { setMode('select'); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { if (e.shiftKey) redo(); else undo(); e.preventDefault(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') { redo(); e.preventDefault(); return; }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') { 
+        if (selectedShapes.length > 0) { deleteSelected(); e.preventDefault(); return; }
+      }
+
+      const panStep = e.shiftKey ? 50 : 20;
+      if (selectedShapes.length === 0 || currentMode === 'pan') {
+        if (e.key === 'ArrowLeft') { panX += panStep; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowRight') { panX -= panStep; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { panY += panStep; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowDown') { panY -= panStep; draw(); e.preventDefault(); }
+      } else if (selectedShapes.length === 1) {
+        const s = selectedShapes[0];
+        const step = e.shiftKey ? 1 : gridPx;
+        let moved = false;
+
+        if (e.key === 'ArrowLeft') { s.x -= step; moved = true; }
+        else if (e.key === 'ArrowRight') { s.x += step; moved = true; }
+        else if (e.key === 'ArrowUp') { s.y -= step; moved = true; }
+        else if (e.key === 'ArrowDown') { s.y += step; moved = true; }
+
+        if (moved) { e.preventDefault(); updateEditPanel(); draw(); }
+      }
+    });
+
+    function transformPoint(x, y, cx, cy, angleDeg) {
+      const rad = (angleDeg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const nx = cos * (x - cx) - sin * (y - cy) + cx;
+      const ny = sin * (x - cx) + cos * (y - cy) + cy;
+      return { x: nx, y: ny };
+    }
+
+    function getRotateHandlePos(s) {
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const topX = cx;
+      const topY = s.y - ROTATE_HANDLE_OFFSET;
+      return transformPoint(topX, topY, cx, cy, s.rotation || 0);
+    }
+
+    function getHandles(s) {
+      if (!s) return [];
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const rot = s.rotation || 0;
+
+      const raw = [
+        { name: 'tl', x: s.x, y: s.y, cursor: 'nwse-resize' },
+        { name: 'tr', x: s.x + s.w, y: s.y, cursor: 'nesw-resize' },
+        { name: 'br', x: s.x + s.w, y: s.y + s.h, cursor: 'nwse-resize' },
+        { name: 'bl', x: s.x, y: s.y + s.h, cursor: 'nesw-resize' }
+      ];
+
+      return raw.map(h => {
+        const pt = transformPoint(h.x, h.y, cx, cy, rot);
+        return { name: h.name, x: pt.x, y: pt.y, cursor: h.cursor };
+      });
+    }
+
+    function getHandleAtPoint(x, y, shape) {
+      const rotPt = getRotateHandlePos(shape);
+      if (Math.hypot(x - rotPt.x, y - rotPt.y) <= (HANDLE_SIZE + 4) / zoom) {
+        return { name: 'rotate', x: rotPt.x, y: rotPt.y, cursor: 'grab' };
+      }
+
+      const handles = getHandles(shape);
+      for (let h of handles) {
+        if (Math.hypot(x - h.x, y - h.y) <= (HANDLE_SIZE + 4) / zoom) return h;
+      }
+      return null;
+    }
+
+    function updateCursorHud(mouseX, mouseY, text) {
+      if (!text) { cursorHud.style.display = 'none'; return; }
+      cursorHud.style.display = 'block';
+      cursorHud.innerText = text;
+      cursorHud.style.left = (mouseX + 15) + 'px';
+      cursorHud.style.top = (mouseY + 15) + 'px';
+    }
+
+    function openInlineTextInput(shape, screenPt) {
+      activeTextShape = shape;
+      inlineTextInput.value = shape.label !== undefined ? shape.label : '';
+      inlineTextInput.style.left = screenPt.x + 'px';
+      inlineTextInput.style.top = screenPt.y + 'px';
+      inlineTextInput.style.display = 'block';
+      setTimeout(() => inlineTextInput.focus(), 50);
+    }
+
+    function commitInlineText() {
+      if (activeTextShape) {
+        saveState();
+        activeTextShape.label = inlineTextInput.value;
+        activeTextShape = null;
+        inlineTextInput.style.display = 'none';
+        updateEditPanel();
+        draw();
+      }
+    }
+
+    function handleTextKey(e) {
+      if (e.key === 'Enter') commitInlineText();
+      else if (e.key === 'Escape') { activeTextShape = null; inlineTextInput.style.display = 'none'; }
+    }
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      panX = mouseX - (mouseX - panX) * zoomFactor;
+      panY = mouseY - (mouseY - panY) * zoomFactor;
+      zoom *= zoomFactor;
+      draw();
+    }, { passive: false });
+
+    canvas.addEventListener('dblclick', (e) => {
+      if (e.button === 0) {
+        setMode('select');
+      }
+    });
+
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      finishDrawing();
+      setMode('select');
+      updateEditPanel();
+      draw();
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      canvas.focus();
+      if (e.button === 2) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const wPt = toWorldCoords(screenX, screenY);
+      currentMouseWorld = wPt;
+
+      if (e.button === 1 || currentMode === 'pan') { 
+        isPanning = true;
+        panStartX = e.clientX - panX;
+        panStartY = e.clientY - panY;
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      if (currentMode === 'offset') {
+        const hitShapes = shapes.filter(s => isPointInShape(wPt.x, wPt.y, s));
+        if (hitShapes.length > 0) {
+          hitShapes.sort((a, b) => getShapeArea(a) - getShapeArea(b));
+          performCadOffset(hitShapes[0], wPt);
+        }
+        return;
+      }
+
+      if (currentMode === 'linear_dimension') {
+        // Direct click on a line/arrow dimensions the complete entity.
+        // This check is intentionally done before point snapping so the line itself wins.
+        if (!linearDimStart) {
+          const lineHit = shapes
+            .filter(s => ['line','arrow','double_arrow'].includes(s.type))
+            .map(s => ({ s, d: distanceToShapeEdge(wPt.x, wPt.y, s) }))
+            .filter(o => o.d <= 14 / zoom)
+            .sort((a,b) => a.d - b.d)[0];
+          if (lineHit) {
+            const s = lineHit.s;
+            const p1 = {x:s.x, y:s.y};
+            const p2 = {x:s.x+s.w, y:s.y+s.h};
+            const d = Math.hypot(p2.x-p1.x, p2.y-p1.y);
+            if (d > 0.01) {
+              saveState();
+              const dim = createLinearDimension(p1, p2);
+              shapes.push(dim);
+              selectedShapes = [dim];
+              activeMeasureInfo = '';
+              updateEditPanel();
+              draw();
+              return;
+            }
+          }
+        }
+
+        const snappedPt = snapMeasurementPoint(wPt.x, wPt.y);
+        if (!linearDimStart) {
+          linearDimStart = snappedPt;
+          linearDimPreview = null;
+          activeMeasureInfo = `Point 1: ${pxToUnit(snappedPt.x)}${scaleUnit}, ${pxToUnit(snappedPt.y)}${scaleUnit} | Select point 2`;
+          updateEditPanel();
+          draw();
+        } else {
+          const p2 = snappedPt;
+          const d = Math.hypot(p2.x - linearDimStart.x, p2.y - linearDimStart.y);
+          if (d > 0.01) {
+            saveState();
+            const dim = createLinearDimension(linearDimStart, p2);
+            shapes.push(dim);
+            selectedShapes = [dim];
+            activeMeasureInfo = '';
+          }
+          linearDimStart = null;
+          linearDimPreview = null;
+          activeMeasurementSnap = null;
+          updateEditPanel();
+          draw();
+        }
+        return;
+      }
+
+      if (currentMode === 'radius_measure') {
+        const hitShapes = shapes.filter(s => s.type === 'circle' && isPointInShape(wPt.x, wPt.y, s));
+        if (hitShapes.length) {
+          hitShapes.sort((a,b) => getShapeArea(a)-getShapeArea(b));
+          const c = hitShapes[0];
+          saveState();
+          const r = Math.min(Math.abs(c.w), Math.abs(c.h)) / 2;
+          const cx = c.x + c.w/2, cy = c.y + c.h/2;
+          const leader = createRadiusMeasurement(c, r, cx, cy);
+          shapes.push(leader);
+          selectedShapes = [leader];
+          activeMeasureInfo = '';
+          updateEditPanel();
+          draw();
+        } else {
+          activeMeasureInfo = 'Radius: click on a circle';
+          updateEditPanel();
+          draw();
+        }
+        return;
+      }
+
+      if (selectedShapes.length === 1) {
+        const handle = getHandleAtPoint(wPt.x, wPt.y, selectedShapes[0]);
+        if (handle) {
+          saveState();
+          if (handle.name === 'rotate') isRotating = true;
+          else activeHandle = handle.name;
+          return;
+        }
+      }
+
+      if (currentMode === 'text') {
+        saveState();
+        const sX = snap(wPt.x);
+        const sY = snap(wPt.y);
+        const newShape = {
+          type: 'text',
+          x: sX, y: sY, w: 120, h: 30,
+          strokeColor: '#ffffff', label: '', fontSize: 16, rotation: 0
+        };
+        shapes.push(newShape);
+        selectedShapes = [newShape];
+        openInlineTextInput(newShape, toScreenCoords(sX, sY));
+        setMode('select');
+        return;
+      }
+
+      if (currentMode !== 'select') {
+        saveState();
+        startX = snap(wPt.x);
+        startY = snap(wPt.y);
+        currentStartPoint = { x: startX, y: startY };
+        const selectedStyle = document.getElementById('globalLineStyle').value;
+        
+        isDrawing = true;
+        let strokeColor = '#00ffcc';
+        let defaultLabel = currentMode.toUpperCase();
+
+        if (SYMBOL_DEFAULTS[currentMode]) {
+          strokeColor = SYMBOL_DEFAULTS[currentMode].strokeColor;
+          defaultLabel = SYMBOL_DEFAULTS[currentMode].label;
+        }
+
+        const newShape = {
+          type: currentMode,
+          x: startX, y: startY, w: 0, h: 0, radius: 0,
+          strokeColor: strokeColor, lineWidth: 2, lineStyle: selectedStyle, rotation: 0, label: defaultLabel, fontSize: 16
+        };
+        selectedShapes = [newShape];
+
+        // V13.1: each new dimension-driven drawing gets a fresh floating
+        // editor beside the cursor. The editor is hidden after Enter/Apply.
+        if (DIMENSION_DRAW_TOOLS.has(currentMode)) {
+          if (exactDimensionArmed && hasCompleteExactDimensions()) {
+            // Exact values were already entered with Enter/Apply. Keep the
+            // popup closed and use the cursor only for orientation.
+            updateDimensionDrivenPreview();
+          } else {
+            dimensionInputHud.style.display='block';
+            positionDimensionInputHud(screenX, screenY);
+          }
+        }
+
+        // V2: show the initial live preview immediately.
+        draw();
+      } else {
+        const hitShapes = shapes.filter(s => isPointInShape(wPt.x, wPt.y, s));
+        let clickedShape = null;
+
+        if (hitShapes.length > 0) {
+          const dimensionHits = hitShapes.filter(s => s.type === 'linear_dimension' || s.type === 'radius_measurement');
+          const pool = dimensionHits.length ? dimensionHits : hitShapes;
+          pool.sort((a, b) => getShapeArea(a) - getShapeArea(b));
+          clickedShape = pool[0];
+        }
+
+        const isMultiKey = e.shiftKey || e.ctrlKey || e.metaKey;
+
+        if (clickedShape) {
+          // V7: selecting any entity, including a dimension, exits measurement-info display.
+          activeMeasureInfo = '';
+          if (isMultiKey) {
+            const idx = selectedShapes.indexOf(clickedShape);
+            if (idx > -1) {
+              selectedShapes.splice(idx, 1);
+            } else {
+              selectedShapes.push(clickedShape);
+            }
+          } else {
+            if (!selectedShapes.includes(clickedShape)) selectedShapes = [clickedShape];
+          }
+          isDragging = true;
+          if (selectedShapes.length === 1 && clickedShape.type === 'linear_dimension') {
+            const p1 = clickedShape.p1 || {x:clickedShape.x||0,y:clickedShape.y||0};
+            const p2 = clickedShape.p2 || {x:(clickedShape.x||0)+(clickedShape.w||0),y:(clickedShape.y||0)+(clickedShape.h||0)};
+            const horizontal = clickedShape.horizontal !== undefined ? clickedShape.horizontal : Math.abs(p2.x-p1.x) >= Math.abs(p2.y-p1.y);
+            dimensionDrag = {type:'linear', shape:clickedShape, horizontal, midX:(p1.x+p2.x)/2, midY:(p1.y+p2.y)/2};
+          } else if (selectedShapes.length === 1 && clickedShape.type === 'radius_measurement') {
+            const cx = clickedShape.cx !== undefined ? clickedShape.cx : clickedShape.x;
+            const cy = clickedShape.cy !== undefined ? clickedShape.cy : clickedShape.y;
+            dimensionDrag = {type:'radius', shape:clickedShape, cx, cy};
+          } else {
+            dimensionDrag = null;
+          }
+          dragOffsets = selectedShapes.map(s => ({ x: wPt.x - s.x, y: wPt.y - s.y }));
+        } else {
+          isBoxSelecting = true;
+          startX = wPt.x;
+          startY = wPt.y;
+          if (!isMultiKey) selectedShapes = [];
+        }
+        updateEditPanel();
+        draw();
+      }
+    });
+
+    // V2: prevent stale preview/HUD when the pointer leaves the drawing canvas.
+    canvas.addEventListener('mouseleave', () => {
+      if (isDrawing) {
+        updateCursorHud(0, 0, null);
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
+      if (isDrawing || isDragging || activeHandle) {
+        const margin = 30;
+        const panSpeed = 8;
+        if (screenX < margin) panX += panSpeed;
+        if (screenX > canvas.width - margin) panX -= panSpeed;
+        if (screenY < margin) panY += panSpeed;
+        if (screenY > canvas.height - margin) panY -= panSpeed;
+      }
+
+      const wPt = toWorldCoords(screenX, screenY);
+      currentMouseWorld = wPt;
+      if (DIMENSION_DRAW_TOOLS.has(currentMode)) {
+        positionDimensionInputHud(screenX, screenY);
+        if (isDrawing) updateDimensionDrivenPreview();
+      }
+
+      if (isPanning) {
+        panX = e.clientX - panStartX;
+        panY = e.clientY - panStartY;
+        draw();
+        return;
+      }
+
+      document.getElementById('coordHud').innerText = `X: ${pxToUnit(wPt.x)}${scaleUnit} | Y: ${pxToUnit(wPt.y)}${scaleUnit}`;
+
+      if (currentMode === 'offset') {
+        const distUnits = parseFloat(document.getElementById('offsetDistanceInput').value) || 0.5;
+        updateCursorHud(screenX, screenY, `Offset Dist: ${distUnits}${scaleUnit}`);
+        draw();
+        return;
+      }
+
+      if (currentMode === 'linear_dimension' && linearDimStart) {
+        const p2 = snapMeasurementPoint(wPt.x, wPt.y);
+        linearDimPreview = createLinearDimension(linearDimStart, p2, true);
+        const distPx = Math.hypot(p2.x-linearDimStart.x, p2.y-linearDimStart.y);
+        updateCursorHud(screenX, screenY, `Linear: ${pxToUnit(distPx)}${scaleUnit} | Click to place`);
+        draw();
+        return;
+      }
+
+      if (currentMode === 'radius_measure') {
+        const hit = shapes.find(s => s.type === 'circle' && isPointInShape(wPt.x, wPt.y, s));
+        updateCursorHud(screenX, screenY, hit ? `Radius: ${pxToUnit(Math.min(Math.abs(hit.w),Math.abs(hit.h))/2)}${scaleUnit} | Click` : 'Click a circle');
+        draw();
+        return;
+      }
+
+      if (selectedShapes.length === 1 && !isDragging && !isDrawing && !activeHandle && !isRotating && !isBoxSelecting) {
+        const h = getHandleAtPoint(wPt.x, wPt.y, selectedShapes[0]);
+        canvas.style.cursor = h ? h.cursor : (isPointInShape(wPt.x, wPt.y, selectedShapes[0]) ? 'move' : (currentMode === 'pan' ? 'grab' : (currentMode === 'linear_dimension' || currentMode === 'radius_measure' || currentMode === 'offset' ? 'copy' : 'crosshair')));
+        updateCursorHud(screenX, screenY, null);
+      }
+
+      if (isRotating && selectedShapes.length === 1) {
+        const s = selectedShapes[0];
+        const cx = s.x + s.w / 2;
+        const cy = s.y + s.h / 2;
+        let rad = Math.atan2(wPt.y - cy, wPt.x - cx);
+        let deg = Math.round((rad * 180) / Math.PI) + 90;
+        if (deg < 0) deg += 360;
+        s.rotation = deg;
+        updateCursorHud(screenX, screenY, `Angle: ${deg}°`);
+        updateEditPanel();
+        draw();
+
+      } else if (activeHandle && selectedShapes.length === 1) {
+        let curX = snap(wPt.x);
+        let curY = snap(wPt.y);
+        let s = selectedShapes[0];
+
+        if (activeHandle === 'br') {
+          s.w = Math.max(10, curX - s.x);
+          s.h = Math.max(10, curY - s.y);
+        } else if (activeHandle === 'tr') {
+          let newH = (s.y + s.h) - curY;
+          if (newH > 10) { s.y = curY; s.h = newH; }
+          s.w = Math.max(10, curX - s.x);
+        } else if (activeHandle === 'bl') {
+          let newW = (s.x + s.w) - curX;
+          if (newW > 10) { s.x = curX; s.w = newW; }
+          s.h = Math.max(10, curY - s.y);
+        } else if (activeHandle === 'tl') {
+          let newW = (s.x + s.w) - curX;
+          let newH = (s.y + s.h) - curY;
+          if (newW > 10) { s.x = curX; s.w = newW; }
+          if (newH > 10) { s.y = curY; s.h = newH; }
+        }
+        updateCursorHud(screenX, screenY, `W: ${pxToUnit(s.w)}${scaleUnit} × H: ${pxToUnit(s.h)}${scaleUnit}`);
+        updateEditPanel();
+        draw();
+
+      } else if (isDrawing && selectedShapes.length === 1) {
+        let currentX = snap(wPt.x);
+        let currentY = snap(wPt.y);
+        const s = selectedShapes[0];
+
+        if (!(DIMENSION_DRAW_TOOLS.has(currentMode) && hasCompleteExactDimensions())) {
+          s.w = currentX - startX;
+          s.h = currentY - startY;
+        } else {
+          updateDimensionDrivenPreview();
+        }
+
+        if (DIMENSION_DRAW_TOOLS.has(currentMode) && hasCompleteExactDimensions()) {
+          let info='';
+          if(currentMode==='circle') info=`R ${getDimensionInputValue('radius')} ${scaleUnit}`;
+          else if(currentMode==='rectangle') info=`L ${getDimensionInputValue('length')} ${scaleUnit} × W ${getDimensionInputValue('width')} ${scaleUnit}`;
+          else info=`L ${getDimensionInputValue('length')} ${scaleUnit}`;
+          updateCursorHud(screenX, screenY, `${getShapeDisplayType(s).toUpperCase()} | ${info} | Enter / click`);
+        } else {
+          updateCursorHud(screenX, screenY, `${getShapeDisplayType(s).toUpperCase()} PREVIEW | ${pxToUnit(s.w)}${scaleUnit} × ${pxToUnit(s.h)}${scaleUnit}`);
+        }
+        draw();
+
+      } else if (isDragging && selectedShapes.length > 0) {
+        if (dimensionDrag && dimensionDrag.type === 'linear' && selectedShapes.length === 1) {
+          const d = dimensionDrag;
+          // V11: Point 1 and Point 2 are fixed. Dragging changes ONLY the
+          // perpendicular dimension offset (far/close from the entity).
+          const newOffset = d.horizontal ? (wPt.y - d.midY) : (wPt.x - d.midX);
+          d.shape.offset = newOffset;
+          updateCursorHud(screenX, screenY, `Dimension: ${pxToUnit(Math.abs(newOffset))}${scaleUnit} | Far / Close`);
+        } else if (dimensionDrag && dimensionDrag.type === 'radius' && selectedShapes.length === 1) {
+          const d = dimensionDrag;
+          const vx=wPt.x-d.cx, vy=wPt.y-d.cy;
+          const ang = Math.atan2(vy,vx);
+          const r = Math.abs(d.shape.radius || Math.hypot((d.shape.ex??d.cx)-d.cx,(d.shape.ey??d.cy)-d.cy));
+          const radialDistance = Math.hypot(vx,vy);
+          const offset = Math.max(8, radialDistance-r);
+          // V12: center/circle remain fixed. Drag anywhere changes both
+          // direction and distance of the leader/text from the circle.
+          d.shape.cx=d.cx; d.shape.cy=d.cy; d.shape.x=d.cx; d.shape.y=d.cy; d.shape.w=r; d.shape.h=0;
+          d.shape.radius=r; d.shape.angle=ang; d.shape.offset=offset;
+          d.shape.ex=d.cx+r*Math.cos(ang); d.shape.ey=d.cy+r*Math.sin(ang);
+          d.shape.tx=d.cx+(r+offset)*Math.cos(ang); d.shape.ty=d.cy+(r+offset)*Math.sin(ang);
+          updateCursorHud(screenX, screenY, `Radius Leader: ${Math.round((ang*180/Math.PI+360)%360)}° | ${pxToUnit(offset)}${scaleUnit} from circle`);
+        } else {
+          selectedShapes.forEach((s, idx) => {
+            const nx = snap(wPt.x - dragOffsets[idx].x);
+            const ny = snap(wPt.y - dragOffsets[idx].y);
+            s.x = nx; s.y = ny;
+          });
+          updateCursorHud(screenX, screenY, `X: ${pxToUnit(wPt.x)}${scaleUnit} | Y: ${pxToUnit(wPt.y)}${scaleUnit}`);
+        }
+        updateEditPanel();
+        draw();
+
+      } else if (isBoxSelecting) {
+        draw();
+        ctx.save();
+        ctx.translate(panX, panY);
+        ctx.scale(zoom, zoom);
+        ctx.strokeStyle = '#00aaff';
+        ctx.fillStyle = 'rgba(0, 170, 255, 0.15)';
+        ctx.lineWidth = 1 / zoom;
+        const bx = Math.min(startX, wPt.x);
+        const by = Math.min(startY, wPt.y);
+        const bw = Math.abs(wPt.x - startX);
+        const bh = Math.abs(wPt.y - startY);
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.restore();
+
+      } else {
+        updateCursorHud(screenX, screenY, null);
+      }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button === 2) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const wPt = toWorldCoords(screenX, screenY);
+      currentMouseWorld = wPt;
+
+      if (isPanning) {
+        isPanning = false;
+        canvas.style.cursor = currentMode === 'pan' ? 'grab' : 'crosshair';
+        return;
+      }
+
+      if (isDrawing && selectedShapes.length === 1) {
+        const s = selectedShapes[0];
+        if (DIMENSION_DRAW_TOOLS.has(currentMode) && hasCompleteExactDimensions()) {
+          commitDimensionDrawing();
+        } else if (Math.abs(s.w) > 2 || Math.abs(s.h) > 2) {
+          if (SYMBOL_DEFAULTS[s.type]) {
+            s.strokeColor = SYMBOL_DEFAULTS[s.type].strokeColor;
+          } else {
+            s.strokeColor = '#ffffff'; 
+          }
+          shapes.push(s);
+          isDrawing = false;
+          currentStartPoint = null;
+          updateEditPanel();
+        } else if (DIMENSION_DRAW_TOOLS.has(currentMode)) {
+          // A simple first click starts dimension-driven drawing; keep the
+          // preview alive so the user can enter an exact size and press Enter.
+          positionDimensionInputHud(screenX, screenY);
+        } else {
+          selectedShapes = [];
+          isDrawing = false;
+          currentStartPoint = null;
+        }
+      }
+
+      if (isBoxSelecting) {
+        const bx = Math.min(startX, wPt.x);
+        const by = Math.min(startY, wPt.y);
+        const bw = Math.abs(wPt.x - startX);
+        const bh = Math.abs(wPt.y - startY);
+
+        shapes.forEach(s => {
+          if (s.x >= bx && s.x + s.w <= bx + bw && s.y >= by && s.y + s.h <= by + bh) {
+            if (!selectedShapes.includes(s)) selectedShapes.push(s);
+          }
+        });
+
+        isBoxSelecting = false;
+        updateEditPanel();
+      }
+
+      isDragging = false;
+      isRotating = false;
+      activeHandle = null;
+      currentStartPoint = null;
+      updateCursorHud(0, 0, null);
+      draw();
+    });
+
+
+    // V5 measurement snapping: nearest meaningful point on the visible entity.
+    function distanceToShapeEdge(x, y, s) {
+      if (['line','arrow','double_arrow'].includes(s.type)) {
+        return Math.hypot(...(() => { const p=closestPointOnSegment(x,y,s.x,s.y,s.x+s.w,s.y+s.h); return [p.x-x,p.y-y]; })());
+      }
+      return Infinity;
+    }
+
+    function snapMeasurementPoint(x, y) {
+      // Object snap is evaluated independently from grid snap.
+      // Corner/endpoint has highest priority, then entity edge, then grid.
+      let gridPoint = { x: snap(x), y: snap(y) };
+      let bestCorner = null, bestCornerDist = Infinity;
+      let bestEdge = null, bestEdgeDist = Infinity;
+      const cornerTol = 18 / zoom;
+      const edgeTol = 14 / zoom;
+
+      for (const s of shapes) {
+        if (s.type === 'linear_dimension' || s.type === 'radius_measurement') continue;
+        const pts = getSnapCandidates(s, x, y);
+        for (const p of pts) {
+          const d = Math.hypot(p.x-x, p.y-y);
+          if (p.snapType === 'corner') {
+            if (d <= cornerTol && d < bestCornerDist) {
+              bestCorner = {x:p.x, y:p.y, snapType:'corner'};
+              bestCornerDist = d;
+            }
+          } else if (d <= edgeTol && d < bestEdgeDist) {
+            bestEdge = {x:p.x, y:p.y, snapType:'edge'};
+            bestEdgeDist = d;
+          }
+        }
+      }
+
+      if (bestCorner) {
+        activeMeasurementSnap = bestCorner;
+        return bestCorner;
+      }
+      if (bestEdge) {
+        activeMeasurementSnap = bestEdge;
+        return bestEdge;
+      }
+      activeMeasurementSnap = null;
+      return gridPoint;
+    }
+
+    function getSnapCandidates(s, x, y) {
+      const out = [];
+      const sx=s.x, sy=s.y, sw=s.w||0, sh=s.h||0;
+      if (['line','arrow','double_arrow'].includes(s.type)) {
+        const x1=sx,y1=sy,x2=sx+sw,y2=sy+sh;
+        out.push({x:x1,y:y1,snapType:'corner'},{x:x2,y:y2,snapType:'corner'}, Object.assign(closestPointOnSegment(x,y,x1,y1,x2,y2),{snapType:'edge'}));
+      } else if (s.type === 'circle') {
+        const cx=sx+sw/2, cy=sy+sh/2, rx=Math.abs(sw/2), ry=Math.abs(sh/2);
+        const ang=Math.atan2(y-cy,x-cx);
+        out.push(Object.assign({x:cx+rx*Math.cos(ang), y:cy+ry*Math.sin(ang)},{snapType:'edge'}), {x:cx+rx,y:cy,snapType:'corner'}, {x:cx-rx,y:cy,snapType:'corner'}, {x:cx,y:cy+ry,snapType:'corner'}, {x:cx,y:cy-ry,snapType:'corner'});
+      } else {
+        let pts=[];
+        if (['rectangle','process_shape','input_fg','pill','terminal'].includes(s.type)) {
+          pts=[{x:sx,y:sy},{x:sx+sw,y:sy},{x:sx+sw,y:sy+sh},{x:sx,y:sy+sh}];
+        } else if (s.type==='diamond'||s.type==='quality') {
+          pts=[{x:sx+sw/2,y:sy},{x:sx+sw,y:sy+sh/2},{x:sx+sw/2,y:sy+sh},{x:sx,y:sy+sh/2}];
+        } else if (s.type==='parallelogram') {
+          const q=sw*.25; pts=[{x:sx+q,y:sy},{x:sx+sw,y:sy},{x:sx+sw-q,y:sy+sh},{x:sx,y:sy+sh}];
+        } else if (s.type==='merge') {
+          pts=[{x:sx+sw/2,y:sy+sh},{x:sx,y:sy},{x:sx+sw,y:sy}];
+        } else {
+          pts=[{x:sx,y:sy},{x:sx+sw,y:sy},{x:sx+sw,y:sy+sh},{x:sx,y:sy+sh}];
+        }
+        for(let i=0;i<pts.length;i++){
+          const a=pts[i], b=pts[(i+1)%pts.length];
+          out.push({x:a.x,y:a.y,snapType:'corner'}, Object.assign(closestPointOnSegment(x,y,a.x,a.y,b.x,b.y),{snapType:'edge'}));
+        }
+      }
+      return out;
+    }
+
+    function closestPointOnSegment(px,py,x1,y1,x2,y2){
+      const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;
+      if(!l2) return {x:x1,y:y1};
+      let t=((px-x1)*dx+(py-y1)*dy)/l2; t=Math.max(0,Math.min(1,t));
+      return {x:x1+t*dx,y:y1+t*dy};
+    }
+
+    function createLinearDimension(p1,p2,preview=false){
+      const dx=p2.x-p1.x, dy=p2.y-p1.y, len=Math.hypot(dx,dy);
+      const horizontal=Math.abs(dx)>=Math.abs(dy);
+      const offset=30;
+      const sign=horizontal ? (currentMouseWorld.y >= (p1.y+p2.y)/2 ? 1 : -1) : (currentMouseWorld.x >= (p1.x+p2.x)/2 ? 1 : -1);
+      return {type:'linear_dimension', x:p1.x,y:p1.y,w:dx,h:dy,p1:{...p1},p2:{...p2},horizontal,offset:offset*sign,strokeColor:'#00ffcc',lineWidth:1.5,lineStyle:'solid',rotation:0,label:'',fontSize:14,preview};
+    }
+
+    function createRadiusMeasurement(circle,r,cx,cy){
+      // V12: radius dimension has an independent leader angle and distance.
+      // The measured circle/center never moves; dragging the dimension changes
+      // only the leader direction and how far the text sits from the circle.
+      const angle = -Math.PI / 4;
+      const offset = Math.max(20, r * 0.20);
+      const ex = cx + r * Math.cos(angle), ey = cy + r * Math.sin(angle);
+      const tx = cx + (r + offset) * Math.cos(angle), ty = cy + (r + offset) * Math.sin(angle);
+      return {type:'radius_measurement',x:cx,y:cy,w:r,h:0,circleId:null,cx,cy,radius:r,ex,ey,tx,ty,angle,offset,strokeColor:'#00ffcc',lineWidth:1.5,lineStyle:'solid',rotation:0,label:'',fontSize:14};
+    }
+
+    function drawArrowHead(x1,y1,x2,y2,size){
+      const a=Math.atan2(y2-y1,x2-x1), s=size;
+      ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(x2-s*Math.cos(a-Math.PI/6),y2-s*Math.sin(a-Math.PI/6)); ctx.lineTo(x2-s*Math.cos(a+Math.PI/6),y2-s*Math.sin(a+Math.PI/6)); ctx.closePath(); ctx.fill();
+    }
+
+    function drawMeasurement(s, isPreview=false){
+      ctx.save();
+      ctx.strokeStyle=isPreview?'#00ffcc':(s.strokeColor||'#00ffcc');
+      ctx.fillStyle=ctx.strokeStyle;
+      ctx.lineWidth=(s.lineWidth||1.5)/zoom;
+      ctx.setLineDash(isPreview?[7/zoom,5/zoom]:[]);
+      ctx.font=`${s.fontSize||14}px sans-serif`;
+      if(s.type==='linear_dimension'){
+        const p1=s.p1,p2=s.p2, dx=p2.x-p1.x,dy=p2.y-p1.y,L=Math.hypot(dx,dy)||1;
+        if(s.horizontal){
+          const yy=((p1.y+p2.y)/2)+(s.offset||30), d1={x:p1.x,y:yy},d2={x:p2.x,y:yy};
+          ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(d1.x,d1.y);ctx.moveTo(p2.x,p2.y);ctx.lineTo(d2.x,d2.y);ctx.moveTo(d1.x,d1.y);ctx.lineTo(d2.x,d2.y);ctx.stroke();
+          drawArrowHead(d2.x,d2.y,d1.x,d1.y,8/zoom);drawArrowHead(d1.x,d1.y,d2.x,d2.y,8/zoom);
+          ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${pxToUnit(L)}${scaleUnit}`, (d1.x+d2.x)/2, yy-5/zoom);
+        } else {
+          const xx=((p1.x+p2.x)/2)+(s.offset||30), d1={x:xx,y:p1.y},d2={x:xx,y:p2.y};
+          ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(d1.x,d1.y);ctx.moveTo(p2.x,p2.y);ctx.lineTo(d2.x,d2.y);ctx.moveTo(d1.x,d1.y);ctx.lineTo(d2.x,d2.y);ctx.stroke();
+          drawArrowHead(d2.x,d2.y,d1.x,d1.y,8/zoom);drawArrowHead(d1.x,d1.y,d2.x,d2.y,8/zoom);
+          ctx.save();ctx.translate(xx, (d1.y+d2.y)/2);ctx.rotate(-Math.PI/2);ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${pxToUnit(L)}${scaleUnit}`,0,-5/zoom);ctx.restore();
+        }
+      } else {
+        // V12 radius leader: circle center -> radius intersection -> text.
+        // The arrow stays on the measured circle and the text can move both
+        // around the circle and farther/closer to it.
+        const cx=s.cx,cy=s.cy,r=Math.abs(s.radius||0);
+        const angle = Number.isFinite(s.angle) ? s.angle : Math.atan2((s.ey??cy)-cy,(s.ex??(cx+r))-cx);
+        const offset = Math.max(8, Number.isFinite(s.offset) ? s.offset : 20);
+        const ex=cx+r*Math.cos(angle), ey=cy+r*Math.sin(angle);
+        const tx=cx+(r+offset)*Math.cos(angle), ty=cy+(r+offset)*Math.sin(angle);
+        s.ex=ex; s.ey=ey; s.tx=tx; s.ty=ty;
+        ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(tx,ty);ctx.stroke();
+        drawArrowHead(tx,ty,ex,ey,8/zoom);
+        // Small gap between leader and text keeps the association obvious.
+        const gap = 7/zoom;
+        const ux=Math.cos(angle), uy=Math.sin(angle);
+        const textX=tx+ux*gap, textY=ty+uy*gap;
+        ctx.textAlign=ux>=0?'left':'right';
+        ctx.textBaseline='middle';
+        ctx.fillText(`R ${pxToUnit(r)}${scaleUnit}`,textX,textY);
+      }
+      ctx.restore();
+    }
+
+    function getShapeArea(s) {
+      return Math.abs((s.w || 0) * (s.h || 0));
+    }
+
+    /* Helper: Distance from point (px, py) to line segment (x1, y1)-(x2, y2) */
+    function distToSegment(px, py, x1, y1, x2, y2) {
+      const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+      if (l2 === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+    }
+
+    /* Helper: Distance from point to polygon edges */
+    function distToPolygon(px, py, points) {
+      let minDist = Infinity;
+      for (let i = 0; i < points.length; i++) {
+        const p1 = points[i];
+        const p2 = points[(i + 1) % points.length];
+        const d = distToSegment(px, py, p1.x, p1.y, p2.x, p2.y);
+        if (d < minDist) minDist = d;
+      }
+      return minDist;
+    }
+
+    function isPointInShape(x, y, s) {
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const unrot = transformPoint(x, y, cx, cy, -(s.rotation || 0));
+      const px = unrot.x;
+      const py = unrot.y;
+      
+      const tolerance = 8 / zoom;
+
+      // V7: dimensions are selectable/deletable like normal CAD entities.
+      // Their visible geometry is not represented by a normal bounding box,
+      // so handle them explicitly before the regular shape hit-testing.
+      if (s.type === 'linear_dimension') {
+        const p1 = s.p1 || {x:s.x, y:s.y};
+        const p2 = s.p2 || {x:s.x + s.w, y:s.y + s.h};
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const horizontal = s.horizontal !== undefined ? s.horizontal : Math.abs(dx) >= Math.abs(dy);
+        const off = s.offset || 30;
+        let d = Infinity;
+        if (horizontal) {
+          const yy = ((p1.y + p2.y) / 2) + off;
+          d = Math.min(
+            distToSegment(px, py, p1.x, p1.y, p1.x, yy),
+            distToSegment(px, py, p2.x, p2.y, p2.x, yy),
+            distToSegment(px, py, p1.x, yy, p2.x, yy)
+          );
+          // Slightly larger hit area around the dimension text.
+          const minX = Math.min(p1.x,p2.x) - 18/zoom, maxX = Math.max(p1.x,p2.x) + 18/zoom;
+          const minY = yy - 18/zoom, maxY = yy + 18/zoom;
+          if (px >= minX && px <= maxX && py >= minY && py <= maxY) d = 0;
+        } else {
+          const xx = ((p1.x + p2.x) / 2) + off;
+          d = Math.min(
+            distToSegment(px, py, p1.x, p1.y, xx, p1.y),
+            distToSegment(px, py, p2.x, p2.y, xx, p2.y),
+            distToSegment(px, py, xx, p1.y, xx, p2.y)
+          );
+          const minX = xx - 18/zoom, maxX = xx + 18/zoom;
+          const minY = Math.min(p1.y,p2.y) - 18/zoom, maxY = Math.max(p1.y,p2.y) + 18/zoom;
+          if (px >= minX && px <= maxX && py >= minY && py <= maxY) d = 0;
+        }
+        return d <= 12 / zoom;
+      }
+
+      if (s.type === 'radius_measurement') {
+        const cx = s.cx !== undefined ? s.cx : s.x;
+        const cy = s.cy !== undefined ? s.cy : s.y;
+        const r = Math.abs(s.radius || 0);
+        const angle = Number.isFinite(s.angle) ? s.angle : Math.atan2((s.ey??cy)-cy,(s.ex??(cx+r))-cx);
+        const offset = Math.max(8, Number.isFinite(s.offset) ? s.offset : 20);
+        const ex = cx + r*Math.cos(angle), ey = cy + r*Math.sin(angle);
+        const tx = cx + (r+offset)*Math.cos(angle), ty = cy + (r+offset)*Math.sin(angle);
+        const d = distToSegment(px, py, cx, cy, tx, ty);
+        const textHalfW = Math.max(35, (String(`R ${pxToUnit(r)}${scaleUnit}`).length * (s.fontSize||14) * 0.32));
+        const textHalfH = Math.max(10, (s.fontSize||14)*0.65);
+        if (Math.abs(px-tx) <= textHalfW/zoom && Math.abs(py-ty) <= textHalfH/zoom) return true;
+        return d <= 12 / zoom;
+      }
+
+      if (s.type === 'image' || s.type === 'text') {
+        const minX = Math.min(s.x, s.x + s.w);
+        const maxX = Math.max(s.x, s.x + s.w);
+        const minY = Math.min(s.y, s.y + s.h);
+        const maxY = Math.max(s.y, s.y + s.h);
+        return px >= minX && px <= maxX && py >= minY && py <= maxY;
+      }
+
+      if (s.type === 'circle') {
+        const rx = Math.abs(s.w / 2);
+        const ry = Math.abs(s.h / 2);
+        const distToCenter = Math.hypot(px - cx, py - cy);
+        const avgRadius = (rx + ry) / 2;
+        return Math.abs(distToCenter - avgRadius) <= tolerance;
+      }
+
+      if (s.type === 'line' || s.type === 'arrow' || s.type === 'double_arrow') {
+        return distToSegment(px, py, s.x, s.y, s.x + s.w, s.y + s.h) <= tolerance;
+      }
+
+      if (s.type === 'elbow') {
+        const d1 = distToSegment(px, py, s.x, s.y, s.x + s.w / 2, s.y);
+        const d2 = distToSegment(px, py, s.x + s.w / 2, s.y, s.x + s.w / 2, s.y + s.h);
+        const d3 = distToSegment(px, py, s.x + s.w / 2, s.y + s.h, s.x + s.w, s.y + s.h);
+        return Math.min(d1, d2, d3) <= tolerance;
+      }
+
+      let points = [];
+      const sx = s.x, sy = s.y, sw = s.w, sh = s.h;
+
+      if (s.type === 'rectangle' || s.type === 'process_shape' || s.type === 'input_fg') {
+        points = [{ x: sx, y: sy }, { x: sx + sw, y: sy }, { x: sx + sw, y: sy + sh }, { x: sx, y: sy + sh }];
+      } else if (s.type === 'diamond' || s.type === 'quality') {
+        points = [{ x: sx + sw / 2, y: sy }, { x: sx + sw, y: sy + sh / 2 }, { x: sx + sw / 2, y: sy + sh }, { x: sx, y: sy + sh / 2 }];
+      } else if (s.type === 'parallelogram') {
+        const shift = sw * 0.25;
+        points = [{ x: sx + shift, y: sy }, { x: sx + sw, y: sy }, { x: sx + sw - shift, y: sy + sh }, { x: sx, y: sy + sh }];
+      } else if (s.type === 'merge') {
+        points = [{ x: sx + sw / 2, y: sy + sh }, { x: sx, y: sy }, { x: sx + sw, y: sy }];
+      } else if (s.type === 'preparation') {
+        const side = sw * 0.2;
+        points = [{ x: sx + side, y: sy }, { x: sx + sw - side, y: sy }, { x: sx + sw, y: sy + sh / 2 }, { x: sx + sw - side, y: sy + sh }, { x: sx + side, y: sy + sh }, { x: sx, y: sy + sh / 2 }];
+      } else if (s.type === 'end_shape') {
+        points = [{ x: sx, y: sy }, { x: sx + sw, y: sy }, { x: sx + sw, y: sy + sh * 0.7 }, { x: sx + sw / 2, y: sy + sh }, { x: sx, y: sy + sh * 0.7 }];
+      } else if (s.type === 'manual_input') {
+        points = [{ x: sx, y: sy + sh * 0.25 }, { x: sx + sw, y: sy }, { x: sx + sw, y: sy + sh }, { x: sx, y: sy + sh }];
+      } else if (s.type === 'next_process') {
+        const ah = sh / 3, aw = sw / 3;
+        points = [{ x: sx, y: sy + ah }, { x: sx + 2 * aw, y: sy + ah }, { x: sx + 2 * aw, y: sy }, { x: sx + sw, y: sy + sh / 2 }, { x: sx + 2 * aw, y: sy + sh }, { x: sx + 2 * aw, y: sy + 2 * ah }, { x: sx, y: sy + 2 * ah }];
+      }
+
+      if (points.length > 0) {
+        return distToPolygon(px, py, points) <= tolerance;
+      }
+
+      /* Fallback check for remaining shapes (pill, database, terminal, etc.) */
+      const bboxPoints = [{ x: sx, y: sy }, { x: sx + sw, y: sy }, { x: sx + sw, y: sy + sh }, { x: sx, y: sy + sh }];
+      return distToPolygon(px, py, bboxPoints) <= tolerance;
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = '#252525';
+      ctx.lineWidth = 1 / zoom;
+      ctx.setLineDash([]);
+      
+      const startXWorld = -panX / zoom;
+      const startYWorld = -panY / zoom;
+      const endXWorld = (canvas.width - panX) / zoom;
+      const endYWorld = (canvas.height - panY) / zoom;
+
+      const firstGridX = Math.floor(startXWorld / gridPx) * gridPx;
+      const firstGridY = Math.floor(startYWorld / gridPx) * gridPx;
+
+      for (let x = firstGridX; x < endXWorld; x += gridPx) {
+        ctx.beginPath(); ctx.moveTo(x, startYWorld); ctx.lineTo(x, endYWorld); ctx.stroke();
+      }
+      for (let y = firstGridY; y < endYWorld; y += gridPx) {
+        ctx.beginPath(); ctx.moveTo(startXWorld, y); ctx.lineTo(endXWorld, y); ctx.stroke();
+      }
+    }
+
+    function renderLabel(s) {
+      ctx.fillStyle = s.strokeColor || '#ffffff';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label !== undefined ? s.label : s.type, s.x + s.w / 2, s.y - 6);
+    }
+
+    function drawShape(s, isPreview = false) {
+      ctx.save();
+      ctx.fillStyle = 'transparent';
+
+      if (s.type === 'linear_dimension' || s.type === 'radius_measurement') {
+        drawMeasurement(s, isPreview || s.preview);
+        ctx.restore();
+        return;
+      }
+
+      // V2 preview styling: clearly visible "ghost" entity that follows
+      // the cursor before the entity is committed with mouse-up.
+      if (isPreview) {
+        ctx.strokeStyle = '#00ffcc';
+        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([7 / zoom, 5 / zoom]);
+      } else {
+        ctx.strokeStyle = selectedShapes.includes(s) ? '#00ffcc' : (s.strokeColor || '#ffffff');
+        ctx.lineWidth = (s.lineWidth || 2) / zoom;
+        if (s.lineStyle === 'dashed') ctx.setLineDash([8 / zoom, 4 / zoom]);
+        else ctx.setLineDash([]);
+      }
+
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      if (s.rotation) {
+        ctx.translate(cx, cy);
+        ctx.rotate((s.rotation * Math.PI) / 180);
+        ctx.translate(-cx, -cy);
+      }
+
+      const x = s.x, y = s.y, w = s.w, h = s.h;
+      ctx.beginPath();
+
+      if (s.type === 'text') {
+        ctx.fillStyle = s.strokeColor || '#ffffff';
+        ctx.font = `${s.fontSize || 16}px sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.fillText(s.label !== undefined ? s.label : 'Text Note', x, y + 15);
+
+      } else if (s.type === 'image' && s.imgElement) {
+        ctx.drawImage(s.imgElement, x, y, w, h);
+
+      } else if (s.type === 'rectangle' || s.type === 'process_shape') {
+        const r = s.radius ? Math.min(s.radius || 12, Math.abs(w)/2, Math.abs(h)/2) : 0;
+        if (r > 0 && ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+        else ctx.rect(x, y, w, h);
+        ctx.stroke();
+        if (s.type === 'process_shape') renderLabel(s);
+
+      } else if (s.type === 'pill') {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + w - h / 2, y);
+        ctx.arc(x + w - h / 2, y + h / 2, h / 2, -Math.PI / 2, Math.PI / 2, false);
+        ctx.lineTo(x, y + h);
+        ctx.closePath();
+        ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'diamond') {
+        ctx.moveTo(x + w / 2, y);
+        ctx.lineTo(x + w, y + h / 2);
+        ctx.lineTo(x + w / 2, y + h);
+        ctx.lineTo(x, y + h / 2);
+        ctx.closePath();
+        ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'parallelogram') {
+        const shift = w * 0.25;
+        ctx.moveTo(x + shift, y);
+        ctx.lineTo(x + w, y);
+        ctx.lineTo(x + w - shift, y + h);
+        ctx.lineTo(x, y + h);
+        ctx.closePath();
+        ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'merge') {
+        ctx.moveTo(x + w / 2, y + h); ctx.lineTo(x, y); ctx.lineTo(x + w, y); ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'database') {
+        ctx.ellipse(x + w/2, y + h*0.2, Math.abs(w/2), Math.abs(h*0.15), 0, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y + h*0.2); ctx.lineTo(x, y + h*0.8); ctx.ellipse(x + w/2, y + h*0.8, Math.abs(w/2), Math.abs(h*0.15), 0, 0, Math.PI, false); ctx.lineTo(x + w, y + h*0.2); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'terminal') {
+        const r = Math.min(Math.abs(w), Math.abs(h)) / 2;
+        if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+        else ctx.rect(x, y, w, h);
+        ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'document_shape') {
+        ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h * 0.8);
+        ctx.bezierCurveTo(x + w * 0.75, y + h * 0.6, x + w * 0.25, y + h * 1.1, x, y + h * 0.8);
+        ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'multi_document') {
+        ctx.moveTo(x + 8, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h * 0.7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + 4, y + 4); ctx.lineTo(x + w - 4, y + 4); ctx.lineTo(x + w - 4, y + h * 0.75); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x + w - 8, y + 8); ctx.lineTo(x + w - 8, y + h * 0.7);
+        ctx.bezierCurveTo(x + (w - 8) * 0.75, y + h * 0.5, x + (w - 8) * 0.25, y + h, x, y + h * 0.8);
+        ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'preparation') {
+        const side = w * 0.2;
+        ctx.moveTo(x + side, y); ctx.lineTo(x + w - side, y); ctx.lineTo(x + w, y + h / 2);
+        ctx.lineTo(x + w - side, y + h); ctx.lineTo(x + side, y + h); ctx.lineTo(x, y + h / 2); ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'end_shape') {
+        ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h * 0.7);
+        ctx.lineTo(x + w / 2, y + h); ctx.lineTo(x, y + h * 0.7); ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'manual_input') {
+        ctx.moveTo(x, y + h * 0.25); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.closePath(); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'circle') {
+        ctx.ellipse(x + w/2, y + h/2, Math.abs(w/2), Math.abs(h/2), 0, 0, Math.PI * 2); ctx.stroke();
+
+      } else if (s.type === 'line' || s.type === 'arrow' || s.type === 'double_arrow') {
+        ctx.moveTo(x, y); ctx.lineTo(x + w, y + h); ctx.stroke();
+
+        if (s.type === 'arrow' || s.type === 'double_arrow') {
+          const angle = Math.atan2(h, w);
+          const headlen = 10 / zoom;
+          ctx.beginPath(); ctx.moveTo(x + w, y + h);
+          ctx.lineTo(x + w - headlen * Math.cos(angle - Math.PI / 6), y + h - headlen * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(x + w - headlen * Math.cos(angle + Math.PI / 6), y + h - headlen * Math.sin(angle + Math.PI / 6));
+          ctx.closePath(); ctx.fillStyle = selectedShapes.includes(s) ? '#00ffcc' : (s.strokeColor || '#ffffff'); ctx.fill();
+        }
+
+        if (s.type === 'double_arrow') {
+          const angle = Math.atan2(h, w);
+          const headlen = 10 / zoom;
+          ctx.beginPath(); ctx.moveTo(x, y);
+          ctx.lineTo(x + headlen * Math.cos(angle - Math.PI / 6), y + headlen * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(x + headlen * Math.cos(angle + Math.PI / 6), y + headlen * Math.sin(angle + Math.PI / 6));
+          ctx.closePath(); ctx.fillStyle = selectedShapes.includes(s) ? '#00ffcc' : (s.strokeColor || '#ffffff'); ctx.fill();
+        }
+
+      } else if (s.type === 'elbow') {
+        ctx.moveTo(x, y); ctx.lineTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + h); ctx.lineTo(x + w, y + h); ctx.stroke();
+
+      } else if (s.type === 'quality') {
+        ctx.moveTo(x + w/2, y); ctx.lineTo(x + w, y + h/2); ctx.lineTo(x + w/2, y + h); ctx.lineTo(x, y + h/2);
+        ctx.closePath(); ctx.stroke(); renderLabel(s);
+
+      } else if (s.type === 'safety') {
+        const w3 = w / 3, h3 = h / 3;
+        ctx.moveTo(x + w3, y); ctx.lineTo(x + 2 * w3, y); ctx.lineTo(x + 2 * w3, y + h3);
+        ctx.lineTo(x + w, y + h3); ctx.lineTo(x + w, y + 2 * h3); ctx.lineTo(x + 2 * w3, y + 2 * h3);
+        ctx.lineTo(x + 2 * w3, y + h); ctx.lineTo(x + w3, y + h); ctx.lineTo(x + w3, y + 2 * h3);
+        ctx.lineTo(x, y + 2 * h3); ctx.lineTo(x, y + h3); ctx.lineTo(x + w3, y + h3);
+        ctx.closePath(); ctx.stroke(); renderLabel(s);
+
+      } else if (s.type === 'wip') {
+        ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.save(); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, Math.PI * 2); ctx.clip();
+        const lineSpacing = 10 / zoom;
+        ctx.beginPath();
+        for (let offset = -Math.max(w, h) * 2; offset < Math.max(w, h) * 2; offset += lineSpacing) {
+          ctx.moveTo(x + offset, y + h * 2); ctx.lineTo(x + offset + w * 2, y - h);
+        }
+        ctx.stroke(); ctx.restore(); renderLabel(s);
+
+      } else if (s.type === 'input_fg') {
+        ctx.rect(x, y, w, h); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y + h); ctx.moveTo(x + w, y); ctx.lineTo(x, y + h); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'operator') {
+        const cxP = x + w / 2, cyP = y + h / 2, r = Math.min(Math.abs(w), Math.abs(h)) / 3;
+        ctx.arc(cxP, cyP, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cxP, cyP + r * 0.2, r * 1.5, 0.1 * Math.PI, 0.9 * Math.PI, false); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cxP, cyP - r * 0.2, r * 0.5, 0, Math.PI * 2); ctx.stroke();
+        renderLabel(s);
+
+      } else if (s.type === 'next_process') {
+        const ah = h / 3, aw = w / 3;
+        ctx.moveTo(x, y + ah); ctx.lineTo(x + 2 * aw, y + ah); ctx.lineTo(x + 2 * aw, y);
+        ctx.lineTo(x + w, y + h / 2); ctx.lineTo(x + 2 * aw, y + h); ctx.lineTo(x + 2 * aw, y + 2 * ah);
+        ctx.lineTo(x, y + 2 * ah); ctx.closePath(); ctx.stroke(); renderLabel(s);
+      }
+
+      ctx.restore();
+
+      if (selectedShapes.includes(s)) {
+        drawHandles(s);
+      }
+    }
+
+    function drawHandles(s) {
+      ctx.save();
+      const handles = getHandles(s);
+      ctx.fillStyle = '#00ffcc';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1 / zoom;
+
+      handles.forEach(h => {
+        ctx.beginPath();
+        ctx.arc(h.x, h.y, HANDLE_SIZE / 2 / zoom, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      const rotPos = getRotateHandlePos(s);
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const topMid = transformPoint(cx, s.y, cx, cy, s.rotation || 0);
+
+      ctx.strokeStyle = '#00ffcc';
+      ctx.setLineDash([2 / zoom, 2 / zoom]);
+      ctx.beginPath();
+      ctx.moveTo(topMid.x, topMid.y);
+      ctx.lineTo(rotPos.x, rotPos.y);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath();
+      ctx.arc(rotPos.x, rotPos.y, (HANDLE_SIZE + 2) / 2 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(panX, panY);
+      ctx.scale(zoom, zoom);
+
+      drawGrid();
+
+      // Draw committed entities first.
+      shapes.forEach(s => drawShape(s));
+
+      // V2: Live command/entity preview.
+      // The active drawing entity is intentionally kept outside `shapes`
+      // until mouse-up, so it must be rendered separately here.
+      if (isDrawing && selectedShapes.length === 1) {
+        const previewShape = selectedShapes[0];
+        if (previewShape && previewShape.w !== undefined && previewShape.h !== undefined) {
+          drawShape(previewShape, true);
+        }
+      }
+
+      if (currentMode === 'linear_dimension' && linearDimPreview) {
+        drawMeasurement(linearDimPreview, true);
+      }
+      if (currentMode === 'linear_dimension' && linearDimStart && currentMouseWorld) {
+        ctx.fillStyle = '#00ffcc';
+        ctx.beginPath(); ctx.arc(linearDimStart.x, linearDimStart.y, 4/zoom, 0, Math.PI*2); ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    resizeCanvas();
+    setMode('select');
+  
+    /* ===================== V8: 3D CAD VIEWER ===================== */
+    let cad3D = {
+      active:false, renderer:null, scene:null, camera:null, controls:null, raycaster:null, mouse:null,
+      root:null, meshes:[], selectedFaces:new Map(), modelUnit:'millimeter', sourceName:'', bbox:null, volumeMm3:0,
+      ready:false, occt:null, initialized:false, measureMode:false, measureStart:null, measureEnd:null, dimensionLine:null
+    };
+
+    function toggle3DMode(){
+      const active = !cad3D.active;
+      cad3D.active = active;
+      const vp=document.getElementById('cad3dViewport');
+      const c=document.getElementById('layoutCanvas');
+      const tb=document.getElementById('cad3d-toolbar');
+      const btn=document.getElementById('cad3dToggleBtn');
+      vp.classList.toggle('active',active); c.style.display=active?'none':'block'; tb.classList.toggle('active',active); document.getElementById('second-bar').classList.toggle('cad-active',active);
+      btn.classList.toggle('active',active);
+      if(active){ initCAD3D(); resizeCAD3D(); setMode('select'); }
+      else { resizeCanvas(); }
+    }
+
+    function openCAD3DFile(){
+      toggle3DIfNeeded();
+      document.getElementById('cad3dFileLoader').click();
+    }
+    function toggle3DIfNeeded(){ if(!cad3D.active){ toggle3DMode(); } }
+
+    async function handleCAD3DFile(event){
+      const file=event.target.files && event.target.files[0];
+      event.target.value='';
+      if(!file) return;
+      toggle3DIfNeeded();
+      const status=document.getElementById('cad3dStatus');
+      status.textContent='Loading '+file.name+' …';
+      try{
+        initCAD3D();
+        if(!cad3D.occt){
+          if(typeof occtimportjs!=='function') throw new Error('OCCT CAD loader could not be loaded. Check internet access and reload the page.');
+          cad3D.occt=await occtimportjs();
+        }
+        const ext=(file.name.split('.').pop()||'').toLowerCase();
+        const bytes=new Uint8Array(await file.arrayBuffer());
+        const params={linearUnit:'millimeter',linearDeflectionType:'bounding_box_ratio',linearDeflection:0.08,angularDeflection:0.5};
+        let result;
+        if(ext==='iges'||ext==='igs') result=cad3D.occt.ReadIgesFile(bytes,params);
+        else result=cad3D.occt.ReadStepFile(bytes,params);
+        if(!result || !result.success) throw new Error('The CAD file could not be parsed.');
+        loadCAD3DResult(result,file.name);
+        status.textContent=file.name+' loaded. Click one or more faces to calculate paint area.';
+      }catch(err){
+        console.error(err); status.textContent='CAD load error: '+(err.message||err); alert('Unable to open CAD file.\n\n'+(err.message||err));
+      }
+    }
+
+    function initCAD3D(){
+      if(cad3D.initialized) return;
+      const canvas3=document.getElementById('cad3dCanvas');
+      cad3D.scene=new THREE.Scene(); cad3D.scene.background=new THREE.Color(0x101010);
+      cad3D.camera=new THREE.PerspectiveCamera(45,1,0.01,1000000); cad3D.camera.position.set(200,160,200);
+      cad3D.renderer=new THREE.WebGLRenderer({canvas:canvas3,antialias:true}); cad3D.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+      cad3D.renderer.outputColorSpace=THREE.SRGBColorSpace;
+      cad3D.renderer.setClearColor(0x101010,1);
+      const hemi=new THREE.HemisphereLight(0xffffff,0x303030,2.0); cad3D.scene.add(hemi);
+      const dir1=new THREE.DirectionalLight(0xffffff,2.2); dir1.position.set(300,400,500); cad3D.scene.add(dir1);
+      const dir2=new THREE.DirectionalLight(0xffffff,1.0); dir2.position.set(-300,100,-250); cad3D.scene.add(dir2);
+      cad3D.controls=new THREE.OrbitControls(cad3D.camera,canvas3); cad3D.controls.enableDamping=true; cad3D.controls.dampingFactor=.08;
+      cad3D.controls.screenSpacePanning=true;
+      cad3D.raycaster=new THREE.Raycaster(); cad3D.mouse=new THREE.Vector2();
+      canvas3.addEventListener('pointerdown',onCAD3DPointerDown);
+      window.addEventListener('resize',resizeCAD3D);
+      cad3D.initialized=true; resizeCAD3D(); animateCAD3D();
+    }
+
+    function resizeCAD3D(){
+      if(!cad3D.initialized) return; const vp=document.getElementById('cad3dViewport'); const w=Math.max(1,vp.clientWidth),h=Math.max(1,vp.clientHeight);
+      cad3D.camera.aspect=w/h; cad3D.camera.updateProjectionMatrix(); cad3D.renderer.setSize(w,h,false);
+    }
+    function animateCAD3D(){ if(!cad3D.initialized)return; requestAnimationFrame(animateCAD3D); cad3D.controls.update(); cad3D.renderer.render(cad3D.scene,cad3D.camera); }
+
+    function loadCAD3DResult(result,name){
+      if(cad3D.root) cad3D.scene.remove(cad3D.root);
+      cad3D.root=new THREE.Group(); cad3D.meshes=[]; cad3D.selectedFaces.clear(); cad3D.volumeMm3=0; cad3D.sourceName=name;
+      const materials=[];
+      (result.meshes||[]).forEach((m,mi)=>{
+        const pos=m.attributes?.position?.array||[]; const nor=m.attributes?.normal?.array||[]; const idx=m.index?.array||[];
+        if(!pos.length||!idx.length)return;
+        const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3)); if(nor.length)geo.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3)); geo.setIndex(idx);
+        if(!nor.length)geo.computeVertexNormals();
+        const baseColor=m.color ? new THREE.Color(m.color[0],m.color[1],m.color[2]) : new THREE.Color(0x8fa3b5);
+        const faces=m.brep_faces||[]; const mats=[];
+        if(faces.length){
+          faces.forEach((f,fi)=>{ mats.push(new THREE.MeshStandardMaterial({color:baseColor,metalness:.15,roughness:.62,side:THREE.DoubleSide})); const start=Math.max(0,Number(f.first)||0)*3; const count=Math.max(0,(Number(f.last)-Number(f.first)+1))*3; if(count)geo.addGroup(start,count,fi); });
+        }else mats.push(new THREE.MeshStandardMaterial({color:baseColor,metalness:.15,roughness:.62,side:THREE.DoubleSide}));
+        const mesh=new THREE.Mesh(geo,mats); mesh.name=m.name||('Part '+(mi+1)); mesh.userData.brepFaces=faces; mesh.userData.baseColor=baseColor.getHex(); mesh.userData.meshIndex=mi; cad3D.root.add(mesh); cad3D.meshes.push(mesh);
+      });
+      cad3D.scene.add(cad3D.root);
+      cad3D.ready=!!cad3D.meshes.length;
+      cad3D.volumeMm3=calculateCAD3DVolume();
+      const box=new THREE.Box3().setFromObject(cad3D.root); cad3D.bbox=box;
+      cad3DFit(); updateCAD3DInfo();
+    }
+
+
+    function calculateCAD3DVolume(){
+      let total=0;
+      cad3D.meshes.forEach(mesh=>{
+        const pos=mesh.geometry.attributes.position.array, idx=mesh.geometry.index?.array;
+        if(!idx)return;
+        let signed=0;
+        for(let t=0;t<idx.length;t+=3){
+          const a=idx[t]*3,b=idx[t+1]*3,c=idx[t+2]*3;
+          const ax=pos[a],ay=pos[a+1],az=pos[a+2], bx=pos[b],by=pos[b+1],bz=pos[b+2], cx=pos[c],cy=pos[c+1],cz=pos[c+2];
+          signed += (ax*(by*cz-bz*cy) - ay*(bx*cz-bz*cx) + az*(bx*cy-by*cx))/6;
+        }
+        total += Math.abs(signed);
+      });
+      return total;
+    }
+    function faceKey(mesh,faceIndex){ return mesh.userData.meshIndex+':'+faceIndex; }
+    function findBrepFace(mesh,tri){
+      const faces=mesh.userData.brepFaces||[];
+      for(let i=0;i<faces.length;i++){ const f=faces[i]; if(tri>=Number(f.first)&&tri<=Number(f.last)) return {index:i,face:f}; }
+      return null;
+    }
+    function raycastCAD3D(e){
+      const rect=e.target.getBoundingClientRect(); cad3D.mouse.x=((e.clientX-rect.left)/rect.width)*2-1; cad3D.mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+      cad3D.raycaster.setFromCamera(cad3D.mouse,cad3D.camera);
+      return cad3D.raycaster.intersectObjects(cad3D.meshes,false);
+    }
+    function onCAD3DPointerDown(e){
+      if(e.button!==0) return;
+      const hits=raycastCAD3D(e); if(!hits.length)return;
+      const hit=hits[0];
+      if(cad3D.measureMode){
+        if(!cad3D.measureStart){ cad3D.measureStart=hit.point.clone(); cad3D.measureEnd=null; updateCAD3DMeasureLabel('Point 1 selected — select Point 2'); document.getElementById('cad3dStatus').textContent='Point 1: X '+hit.point.x.toFixed(2)+'  Y '+hit.point.y.toFixed(2)+'  Z '+hit.point.z.toFixed(2)+' mm'; }
+        else { cad3D.measureEnd=hit.point.clone(); updateCAD3DMeasureLabel(formatCAD3DDimension(cad3D.measureStart,cad3D.measureEnd)); document.getElementById('cad3dStatus').textContent='3D dimension completed — click 3D Measure for a new measurement.'; cad3D.measureMode=false; document.getElementById('cadMeasureBtn').classList.remove('active'); if(cad3D.controls) cad3D.controls.enabled=true; }
+        drawCAD3DDimension(); return;
+      }
+      const mesh=hit.object; const tri=hit.faceIndex??-1; const bf=findBrepFace(mesh,tri); if(!bf)return;
+      const key=faceKey(mesh,bf.index);
+      if(e.shiftKey){ if(cad3D.selectedFaces.has(key)) cad3D.selectedFaces.delete(key); else cad3D.selectedFaces.set(key,{mesh,faceIndex:bf.index,face:bf.face}); }
+      else { cad3D.selectedFaces.clear(); cad3D.selectedFaces.set(key,{mesh,faceIndex:bf.index,face:bf.face}); }
+      rebuildCAD3DHighlights(); updateCAD3DInfo();
+    }
+
+    function triangleArea(pos,a,b,c){
+      const ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2], bx=pos[b*3],by=pos[b*3+1],bz=pos[b*3+2], cx=pos[c*3],cy=pos[c*3+1],cz=pos[c*3+2];
+      const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az; return .5*Math.sqrt((uy*vz-uz*vy)**2+(uz*vx-ux*vz)**2+(ux*vy-uy*vx)**2);
+    }
+    function faceArea(mesh,face){
+      const pos=mesh.geometry.attributes.position.array, idx=mesh.geometry.index?.array; if(!idx)return 0;
+      let area=0; const first=Math.max(0,Number(face.first)||0), last=Math.min(Math.floor(idx.length/3)-1,Number(face.last)||0);
+      for(let t=first;t<=last;t++) area+=triangleArea(pos,idx[t*3],idx[t*3+1],idx[t*3+2]); return area;
+    }
+    function rebuildCAD3DHighlights(){
+      if(!cad3D.root)return;
+      cad3D.root.children.filter(x=>x.userData.isCADHighlight).forEach(x=>cad3D.root.remove(x));
+      cad3D.selectedFaces.forEach(sel=>{
+        const src=sel.mesh, pos=src.geometry.attributes.position.array, idx=src.geometry.index?.array; if(!idx)return;
+        const first=Math.max(0,Number(sel.face.first)||0), last=Math.min(Math.floor(idx.length/3)-1,Number(sel.face.last)||0);
+        const p=[];
+        for(let t=first;t<=last;t++){ for(let j=0;j<3;j++){const vi=idx[t*3+j];p.push(pos[vi*3],pos[vi*3+1],pos[vi*3+2]);} }
+        if(!p.length)return;
+        const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(p,3)); g.computeVertexNormals();
+        const h=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0xffd54a,transparent:true,opacity:.55,side:THREE.DoubleSide,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2})); h.userData.isCADHighlight=true; cad3D.root.add(h);
+      });
+    }
+    function clearCAD3DSelection(){cad3D.selectedFaces.clear();rebuildCAD3DHighlights();updateCAD3DInfo();}
+
+    function cad3DFit(){
+      if(!cad3D.bbox||!cad3D.camera)return; const center=cad3D.bbox.getCenter(new THREE.Vector3()), size=cad3D.bbox.getSize(new THREE.Vector3()); const maxDim=Math.max(size.x,size.y,size.z,1);
+      cad3D.controls.target.copy(center); cad3D.camera.position.copy(center.clone().add(new THREE.Vector3(maxDim*1.55,maxDim*1.25,maxDim*1.55))); cad3D.camera.near=Math.max(maxDim/100000,0.001); cad3D.camera.far=maxDim*100; cad3D.camera.updateProjectionMatrix(); cad3D.controls.update();
+    }
+    function cad3DView(v){
+      if(!cad3D.bbox)return; const c=cad3D.bbox.getCenter(new THREE.Vector3()), s=cad3D.bbox.getSize(new THREE.Vector3()), d=Math.max(s.x,s.y,s.z)*1.8;
+      const views={front:[0,0,d],back:[0,0,-d],left:[-d,0,0],right:[d,0,0],top:[0,d,0],bottom:[0,-d,0],iso1:[d,d,d],iso2:[-d,d,d],iso3:[d,d,-d]};
+      const a=views[v]||views.iso1; const off=new THREE.Vector3(a[0],a[1],a[2]);
+      cad3D.controls.target.copy(c); cad3D.camera.position.copy(c.clone().add(off)); cad3D.controls.update();
+    }
+    function toggleCAD3DMeasure(){
+      if(!cad3D.ready && !cad3D.root){
+        updateCAD3DMeasureLabel('Load a STEP/IGES model first');
+        return;
+      }
+      cad3D.measureMode=!cad3D.measureMode;
+      cad3D.measureStart=null;
+      cad3D.measureEnd=null;
+      document.getElementById('cadMeasureBtn').classList.toggle('active',cad3D.measureMode);
+      if(cad3D.controls) cad3D.controls.enabled=!cad3D.measureMode;
+      updateCAD3DMeasureLabel(cad3D.measureMode?'3D Measure ON — click Point 1':'');
+      drawCAD3DDimension();
+    }
+
+    function clearCAD3DMeasure(){
+      cad3D.measureMode=false;
+      cad3D.measureStart=null;
+      cad3D.measureEnd=null;
+      if(cad3D.controls) cad3D.controls.enabled=true;
+      document.getElementById('cadMeasureBtn').classList.remove('active');
+      updateCAD3DMeasureLabel('');
+      drawCAD3DDimension();
+    }
+
+    function formatCAD3DDimension(a,b){
+      const dx=b.x-a.x, dy=b.y-a.y, dz=b.z-a.z;
+      const L=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      const cm=L/10, inch=L/25.4;
+      return `3D Distance: ${L.toFixed(2)} mm  |  ${cm.toFixed(2)} cm  |  ${inch.toFixed(3)} in\nΔX: ${Math.abs(dx).toFixed(2)} mm   ΔY: ${Math.abs(dy).toFixed(2)} mm   ΔZ: ${Math.abs(dz).toFixed(2)} mm`;
+    }
+
+    function updateCAD3DMeasureLabel(text){
+      const el=document.getElementById('cad3dMeasureLabel');
+      el.textContent=text||'';
+      el.style.whiteSpace='pre-line';
+      el.style.display=text?'block':'none';
+    }
+
+    function drawCAD3DDimension(){
+      if(cad3D.dimensionLine){
+        cad3D.scene.remove(cad3D.dimensionLine);
+        cad3D.dimensionLine.geometry?.dispose();
+        cad3D.dimensionLine.material?.dispose();
+        cad3D.dimensionLine=null;
+      }
+      if(!cad3D.measureStart||!cad3D.measureEnd)return;
+      const g=new THREE.BufferGeometry().setFromPoints([cad3D.measureStart,cad3D.measureEnd]);
+      const m=new THREE.LineBasicMaterial({color:0x00ffcc,depthTest:false});
+      cad3D.dimensionLine=new THREE.Line(g,m);
+      cad3D.dimensionLine.renderOrder=20;
+      cad3D.scene.add(cad3D.dimensionLine);
+    }
+
+    function updateCAD3DInfo(){
+      const el=document.getElementById('cad3dInfo'); if(!cad3D.sourceName){el.innerHTML='3D CAD: <strong>no model loaded</strong>';return;}
+      let areaMm2=0; cad3D.selectedFaces.forEach(sel=>areaMm2+=faceArea(sel.mesh,sel.face));
+      const areaM2=areaMm2/1e6, areaFt2=areaM2*10.7639104167;
+      const density=Number(document.getElementById('cadDensity')?.value)||2700; const volumeCm3=cad3D.volumeMm3/1000; const massKg=cad3D.volumeMm3*density/1e9;
+      el.innerHTML='<strong>'+escapeHtml(cad3D.sourceName)+'</strong> · Faces: '+cad3D.selectedFaces.size+' · Paint area: <strong>'+areaM2.toFixed(4)+' m²</strong> ('+areaFt2.toFixed(3)+' ft²) · Volume: '+volumeCm3.toFixed(2)+' cm³ · Weight @ '+density+' kg/m³: <strong>'+massKg.toFixed(3)+' kg</strong>';
+    }
+    function escapeHtml(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+    document.getElementById('cadDensity')?.addEventListener('input',updateCAD3DInfo);
+
+</script>
+</body>
+</html>
